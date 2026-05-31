@@ -9,12 +9,12 @@
   },
   "workspaces": [
     "frontend",
-    "api"
+    "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm -C frontend run dev\" \"npm -C api run dev\"",
+    "dev": "concurrently \"npm -C frontend run dev\" \"npm -C backend run dev\"",
     "build": "npm -C frontend run build",
-    "start": "npm -C api run start"
+    "start": "npm -C backend run start"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

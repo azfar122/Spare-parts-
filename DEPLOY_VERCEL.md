@@ -5,9 +5,10 @@ Your project is now restructured for Vercel deployment! Here's how to deploy:
 ## Project Structure
 ```
 bike-spare-saas/
-├── api/                      # Node.js backend (Vercel serverless functions at /api)
+├── api/                      # Vercel serverless wrapper
+│   └── index.js             # Single serverless entry point
+├── backend/                  # Express backend source
 │   ├── src/
-│   ├── index.js             # Entry point for serverless
 │   ├── package.json
 │   └── .env                 # MongoDB URI, JWT_SECRET, etc.
 ├── frontend/                # React frontend (deployed to root domain /)
@@ -119,8 +120,8 @@ npm run build
 - Make sure MongoDB connection string is valid
 
 ### "API returns 404"
-- Verify routes don't have `/api` prefix (already fixed in latest code)
-- Check that `api/index.js` exists
+- Check that `api/index.js` exists and imports from `backend/src/server.js`
+- Confirm `vercel.json` rewrites `/api/*` to the single API entrypoint
 - Confirm environment variables are set
 
 ### "Frontend can't connect to API"

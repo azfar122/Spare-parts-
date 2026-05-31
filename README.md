@@ -34,7 +34,7 @@ A full-stack SaaS platform for managing motorcycle spare parts inventory, sales,
 - 📱 Fully responsive design
 
 ## Stack
-- **Frontend**: React 18 + Vite + Tailwind CSS 3 + React Router v6 + Axios + Socket.IO
+- **Frontend**: React + Vite + Tailwind CSS + React Router + Axios + Socket.IO
 - **Backend**: Node.js + Express + MongoDB + Mongoose + JWT + Socket.IO + CORS
 - **Database**: MongoDB Atlas or local MongoDB
 - **Deployment**: Vercel (monorepo with serverless functions)
@@ -64,14 +64,14 @@ This starts:
 
 #### 1. Configure Backend
 ```bash
-cd api
+cd backend
 cp .env.example .env
 # Edit .env with your MongoDB URI and JWT_SECRET
 ```
 
 #### 2. Seed Database
 ```bash
-npm run seed -C api
+npm run seed -C backend
 ```
 
 Default Test Users:
@@ -80,7 +80,7 @@ Default Test Users:
 
 #### 3. Import Products from CSV
 ```bash
-CSV_PATH=/path/to/your/products.csv npm run import:csv -C api
+CSV_PATH=/path/to/your/products.csv npm run import:csv -C backend
 ```
 
 CSV format: `Part Name | Part Code | Model | Booking Price | MRP | Min Order Qty`
@@ -89,14 +89,16 @@ CSV format: `Part Name | Part Code | Model | Booking Price | MRP | Min Order Qty
 
 ```
 bike-spare-saas/
-├── api/                           # Node.js Express backend
+├── api/                           # Vercel serverless wrapper
+│   └── index.js                  # Vercel serverless entry
+│
+├── backend/                       # Express backend source
 │   ├── src/
 │   │   ├── models/               # MongoDB schemas
 │   │   ├── routes/               # API endpoints
 │   │   ├── middleware/           # Auth, CORS, logging
 │   │   ├── utils/                # DB, seeds, imports
 │   │   └── server.js             # Express app setup
-│   ├── index.js                  # Vercel serverless entry
 │   ├── package.json
 │   └── .env                      # Environment variables
 │
@@ -137,7 +139,7 @@ npm run preview  # Preview production build
 
 ### Backend Only
 ```bash
-cd api
+cd backend
 npm run dev      # Start with nodemon (hot reload)
 npm start        # Start in production
 npm run seed     # Seed test users to database
@@ -226,7 +228,7 @@ Built with Tailwind CSS responsive utilities.
 
 ### "API not responding"
 - Check backend is running: `curl http://localhost:5001/health`
-- Verify CORS origin in `api/.env`
+- Verify CORS origin in `backend/.env`
 
 ### "Frontend shows 404"
 - Clear browser cache
