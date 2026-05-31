@@ -1,0 +1,19 @@
+{
+  "name": "bike-spare-saas",
+  "version": "1.0.0",
+  "description": "Bike Spare Parts SaaS Platform",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "api"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm -C frontend run dev\" \"npm -C api run dev\"",
+    "build": "npm -C api run build && npm -C frontend run build",
+    "start": "npm -C api run start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

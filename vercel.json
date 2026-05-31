@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "npm -C frontend run build",
+  "outputDirectory": "frontend/dist",
+  "framework": null,
+  "env": {
+    "VITE_API_URL": "/api",
+    "VITE_SOCKET_URL": ""
+  }
+}
