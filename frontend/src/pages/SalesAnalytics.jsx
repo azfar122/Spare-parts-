@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 export default function SalesAnalytics() {
@@ -13,19 +14,25 @@ export default function SalesAnalytics() {
   const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
   const [selectedSale, setSelectedSale] = useState(null);
+  const [loading, setLoading] = useState(false);
   const limit = 50;
 
   async function load(pageNum = 1) {
-    const params = { page: pageNum, limit };
-    if (startDate) params.startDate = startDate;
-    if (endDate) params.endDate = endDate;
-    if (productCode) params.productCode = productCode;
-    if (productName) params.productName = productName;
+    try {
+      setLoading(true);
+      const params = { page: pageNum, limit };
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (productCode) params.productCode = productCode;
+      if (productName) params.productName = productName;
 
-    const r = await api.get('/sales', { params });
-    setSales(r.data.items);
-    setTotal(r.data.total || 0);
-    setPage(pageNum);
+      const r = await api.get('/sales', { params });
+      setSales(r.data.items);
+      setTotal(r.data.total || 0);
+      setPage(pageNum);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(1); }, []);
@@ -58,12 +65,15 @@ export default function SalesAnalytics() {
           <input type="text" value={productName} onChange={e => setProductName(e.target.value)} placeholder="Search by part name" className="mt-1 w-full rounded-xl border p-3" />
         </div>
       </form>
-      <button onClick={handleSearch} className="w-full md:w-auto rounded-xl bg-brand-dark text-white px-6 py-3 font-medium">Search</button>
+      <button onClick={handleSearch} disabled={loading} className="w-full md:w-auto rounded-xl bg-brand-dark text-white px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-70 inline-flex items-center justify-center gap-2">
+        {loading && <ButtonSpinner />}
+        {loading ? 'Searching...' : 'Search'}
+      </button>
       <button onClick={() => { setStartDate(''); setEndDate(''); setProductCode(''); setProductName(''); load(1); }} className="w-full md:w-auto ml-2 rounded-xl border px-6 py-3 font-medium">Clear Filters</button>
     </div>
 
     <div className="rounded-3xl bg-white shadow-soft border overflow-hidden">
-      <table className="w-full text-sm">
+      {loading ? <LoadingState label="Loading sales..." /> : <table className="w-full text-sm">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
             <th className="p-4 text-left">Receipt #</th>
@@ -90,8 +100,8 @@ export default function SalesAnalytics() {
             </tr>
           ))}
         </tbody>
-      </table>
-      {sales.length === 0 && <div className="text-center py-8 text-slate-500">No sales found</div>}
+      </table>}
+      {!loading && sales.length === 0 && <div className="text-center py-8 text-slate-500">No sales found</div>}
     </div>
 
     {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">

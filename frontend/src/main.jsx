@@ -8,10 +8,11 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 import SalesDashboard from './pages/SalesDashboard.jsx';
 import SalesAnalytics from './pages/SalesAnalytics.jsx';
 import PurchaseOrders from './pages/PurchaseOrders.jsx';
+import { LoadingState } from './components/Loader.jsx';
 
 function Protected({ role, children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen grid place-items-center">Loading...</div>;
+  if (loading) return <LoadingState fullScreen label="Checking session..." />;
   if (!user) return <Navigate to="/login" replace />;
   if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin' : '/sales'} replace />;
   return children;

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
+import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 export default function SalesDashboard() {
@@ -18,21 +19,31 @@ export default function SalesDashboard() {
   const [total, setTotal] = useState(0);
   const limit = 50;
   const [hasExactMatch, setHasExactMatch] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [returnSaving, setReturnSaving] = useState(false);
 
   async function load(pageNum = 1) {
-    const r = await api.get('/products', { params: { q, limit, page: pageNum } });
-    setProducts(r.data.items);
-    setTotal(r.data.total || 0);
-    setPage(pageNum);
-    
-    if (q) {
-      const hasExact = r.data.items?.some(p => 
-        p.partName?.toUpperCase() === q.toUpperCase() || 
-        p.partCode?.toUpperCase() === q.toUpperCase()
-      );
-      setHasExactMatch(hasExact);
-    } else {
-      setHasExactMatch(true);
+    try {
+      setLoadingProducts(true);
+      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
+      setProducts(r.data.items);
+      setTotal(r.data.total || 0);
+      setPage(pageNum);
+      
+      if (q) {
+        const hasExact = r.data.items?.some(p => 
+          p.partName?.toUpperCase() === q.toUpperCase() || 
+          p.partCode?.toUpperCase() === q.toUpperCase()
+        );
+        setHasExactMatch(hasExact);
+      } else {
+        setHasExactMatch(true);
+      }
+    } catch (err) {
+      console.error('Failed to load products:', err);
+    } finally {
+      setLoadingProducts(false);
     }
   }
 
@@ -49,8 +60,13 @@ export default function SalesDashboard() {
   const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
 
   async function checkout() {
-    const r = await api.post('/sales', { customerName: 'Walk-in Customer', items: cart });
-    setReceipt(r.data); setCart([]); await load(page);
+    try {
+      setCheckoutLoading(true);
+      const r = await api.post('/sales', { customerName: 'Walk-in Customer', items: cart });
+      setReceipt(r.data); setCart([]); await load(page);
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
   
   async function doReturn(e) {
@@ -65,6 +81,7 @@ export default function SalesDashboard() {
     };
     if (body.qty <= 0) return alert('Enter quantity');
     try {
+      setReturnSaving(true);
       await api.post('/returns', body);
       setReturnForm(false);
       setReturnSearch('');
@@ -73,6 +90,8 @@ export default function SalesDashboard() {
       alert('Return saved and stock updated');
     } catch (err) {
       alert('Error: ' + err.response?.data?.message || err.message);
+    } finally {
+      setReturnSaving(false);
     }
   }
 
@@ -89,9 +108,9 @@ export default function SalesDashboard() {
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
         </div>
-        {q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
-        {q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
-        <ProductTable products={products} salesMode onAddSale={addSale} onDetail={()=>{}} />
+        {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
+        {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
+        {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable products={products} salesMode onAddSale={addSale} onDetail={()=>{}} />}
         {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
           <div className="flex items-center gap-2">
@@ -124,7 +143,10 @@ export default function SalesDashboard() {
             <div className="flex justify-between"><span>Discount</span><b>Rs {totals.dis.toLocaleString()}</b></div>
             <div className="flex justify-between text-lg"><span>Total</span><b>Rs {(totals.sub-totals.dis).toLocaleString()}</b></div>
           </div>
-          <button onClick={checkout} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold">Create Receipt</button>
+          <button onClick={checkout} disabled={checkoutLoading} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+            {checkoutLoading && <ButtonSpinner />}
+            {checkoutLoading ? 'Creating receipt...' : 'Create Receipt'}
+          </button>
         </div>}
       </aside>
     </div>
@@ -176,7 +198,10 @@ export default function SalesDashboard() {
         <input name="qty" placeholder="Return quantity" type="number" min="1" className="rounded-xl border p-3" required />
         <input name="amountRefunded" placeholder="Amount refunded" type="number" className="rounded-xl border p-3" />
         <textarea name="reason" placeholder="Reason" className="rounded-xl border p-3" />
-        <button type="submit" className="rounded-xl bg-brand-red text-white py-3 font-bold">Save Return</button>
+        <button type="submit" disabled={returnSaving} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          {returnSaving && <ButtonSpinner />}
+          {returnSaving ? 'Saving return...' : 'Save Return'}
+        </button>
       </form>
     </Modal>}
   </Layout>;

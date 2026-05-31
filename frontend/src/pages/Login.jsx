@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bike, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { ButtonSpinner } from '../components/Loader.jsx';
 
 export default function Login() {
   const { login } = useAuth();
@@ -10,11 +11,14 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit(e) {
     e.preventDefault(); setError('');
+    setSubmitting(true);
     try { const user = await login(username, password); navigate(user.role === 'admin' ? '/admin' : '/sales'); }
     catch (err) { setError(err.response?.data?.message || 'Invalid username or password'); }
+    finally { setSubmitting(false); }
   }
 
   return <div className="min-h-screen grid lg:grid-cols-2 bg-white">
@@ -34,7 +38,10 @@ export default function Login() {
           <input type={showPassword ? "text" : "password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter password" className="w-full rounded-xl border p-3 pr-10" />
           <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-500 hover:text-slate-700">{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
         </div>
-        <button className="w-full rounded-xl bg-brand-red py-3 font-bold text-white hover:opacity-90">Login</button>
+        <button disabled={submitting} className="w-full rounded-xl bg-brand-red py-3 font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          {submitting && <ButtonSpinner />}
+          {submitting ? 'Logging in...' : 'Login'}
+        </button>
       </form>
     </div>
   </div>;

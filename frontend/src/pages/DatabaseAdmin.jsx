@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
+import { LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 import { Users, Package, ShoppingCart } from 'lucide-react';
 
@@ -40,7 +41,7 @@ export default function DatabaseAdmin() {
 
   useEffect(() => { loadData(); }, []);
 
-  if (loading) return <Layout title="Database Admin" subtitle="View all database tables"><div className="text-center py-8">Loading...</div></Layout>;
+  if (loading) return <Layout title="Database Admin" subtitle="View all database tables"><LoadingState label="Loading database..." /></Layout>;
 
   return <Layout title="Database Admin" subtitle="View all database tables and statistics">
     <div className="grid md:grid-cols-4 gap-4 mb-8">

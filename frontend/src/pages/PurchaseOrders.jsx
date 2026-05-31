@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 export default function PurchaseOrders() {
@@ -12,6 +13,10 @@ export default function PurchaseOrders() {
   const [showForm, setShowForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [receiveForm, setReceiveForm] = useState(null);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [receivingItems, setReceivingItems] = useState(false);
   const limit = 50;
 
   const [formData, setFormData] = useState({
@@ -23,15 +28,25 @@ export default function PurchaseOrders() {
   const [searchQueries, setSearchQueries] = useState({});
 
   async function loadOrders(pageNum = 1) {
-    const r = await api.get('/purchase-orders', { params: { page: pageNum, limit } });
-    setOrders(r.data.items);
-    setTotal(r.data.total || 0);
-    setPage(pageNum);
+    try {
+      setLoadingOrders(true);
+      const r = await api.get('/purchase-orders', { params: { page: pageNum, limit } });
+      setOrders(r.data.items);
+      setTotal(r.data.total || 0);
+      setPage(pageNum);
+    } finally {
+      setLoadingOrders(false);
+    }
   }
 
   async function loadProducts() {
-    const r = await api.get('/products', { params: { limit: 1000 } });
-    setProducts(r.data.items || []);
+    try {
+      setLoadingProducts(true);
+      const r = await api.get('/products', { params: { limit: 1000 } });
+      setProducts(r.data.items || []);
+    } finally {
+      setLoadingProducts(false);
+    }
   }
 
   useEffect(() => {
@@ -42,6 +57,7 @@ export default function PurchaseOrders() {
   async function handleSubmit(e) {
     e.preventDefault();
     try {
+      setCreatingOrder(true);
       await api.post('/purchase-orders', {
         orderNumber: formData.orderNumber,
         totalPrice: Number(formData.totalPrice),
@@ -55,15 +71,18 @@ export default function PurchaseOrders() {
       });
       setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }], notes: '' });
       setShowForm(false);
-      loadOrders(1);
+      await loadOrders(1);
     } catch (err) {
       alert('Error creating order: ' + err.message);
+    } finally {
+      setCreatingOrder(false);
     }
   }
 
   async function handleReceive(e) {
     e.preventDefault();
     try {
+      setReceivingItems(true);
       const order = selectedOrder;
       const itemIdx = receiveForm.itemIndex;
       const receivedQty = Number(receiveForm.receivedQty);
@@ -75,9 +94,11 @@ export default function PurchaseOrders() {
       
       setSelectedOrder(updated.data);
       setReceiveForm(null);
-      loadOrders(page);
+      await loadOrders(page);
     } catch (err) {
       alert('Error receiving: ' + err.message);
+    } finally {
+      setReceivingItems(false);
     }
   }
 
@@ -91,7 +112,7 @@ export default function PurchaseOrders() {
   return <Layout title="Purchase Orders" subtitle="Manage orders from manufacturers and track inventory receipts.">
     <button onClick={() => setShowForm(true)} className="mb-6 rounded-xl bg-brand-red text-white px-6 py-3 font-bold flex items-center gap-2"><Plus size={20}/>New Order</button>
 
-    {orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">
+    {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">
       <table className="w-full text-sm">
         <thead className="bg-slate-50"><tr><th className="p-4 text-left">Order #</th><th className="p-4 text-left">Date</th><th className="p-4 text-right">Total Price</th><th className="p-4 text-right">Items</th><th className="p-4 text-left">Status</th><th className="p-4 text-center">Action</th></tr></thead>
         <tbody>
@@ -99,6 +120,7 @@ export default function PurchaseOrders() {
         </tbody>
       </table>
     </div>}
+    {!loadingOrders && orders.length === 0 && <div className="rounded-3xl bg-white shadow-soft border p-8 text-center text-slate-500">No purchase orders found</div>}
 
     {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
       <button onClick={() => loadOrders(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40"><ChevronLeft size={16}/>Prev</button>
@@ -114,6 +136,7 @@ export default function PurchaseOrders() {
         </div>
         
         <div><label className="text-sm font-medium">Items</label>
+          {loadingProducts && <div className="mt-3 rounded-xl border bg-white"><LoadingState label="Loading products..." /></div>}
           {formData.items.map((item, idx) => {
             const sq = searchQueries[idx] || '';
             const filteredProducts = products.filter(p => 
@@ -209,7 +232,10 @@ export default function PurchaseOrders() {
         </div>
 
         <div><label className="text-sm font-medium">Notes</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Order notes" className="mt-1 w-full rounded-xl border p-3" /></div>
-        <button type="submit" className="w-full rounded-xl bg-brand-red text-white py-3 font-bold">Create Order</button>
+        <button type="submit" disabled={creatingOrder} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          {creatingOrder && <ButtonSpinner />}
+          {creatingOrder ? 'Creating order...' : 'Create Order'}
+        </button>
       </form>
     </Modal>}
 
@@ -249,7 +275,10 @@ export default function PurchaseOrders() {
           <label className="text-sm font-medium">Quantity Received</label>
           <input type="number" min="0" value={receiveForm.receivedQty} onChange={e => setReceiveForm({...receiveForm, receivedQty: e.target.value})} className="mt-2 w-full rounded-xl border p-3" />
         </div>
-        <button type="submit" className="w-full rounded-xl bg-green-600 text-white py-3 font-bold">Confirm Receipt</button>
+        <button type="submit" disabled={receivingItems} className="w-full rounded-xl bg-green-600 text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          {receivingItems && <ButtonSpinner />}
+          {receivingItems ? 'Confirming...' : 'Confirm Receipt'}
+        </button>
       </form>
     </Modal>}
   </Layout>;

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
+import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 export default function AdminDashboard() {
@@ -18,31 +19,45 @@ export default function AdminDashboard() {
   const [returns, setReturns] = useState([]);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [hasExactMatch, setHasExactMatch] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [addingProduct, setAddingProduct] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function load(pageNum = 1) {
-    const r = await api.get('/products', { params: { q, limit, page: pageNum } });
-    setProducts(r.data.items);
-    setTotal(r.data.total || 0);
-    setPage(pageNum);
-    
-    if (q) {
-      const hasExact = r.data.items?.some(p => 
-        p.partName?.toUpperCase() === q.toUpperCase() || 
-        p.partCode?.toUpperCase() === q.toUpperCase() ||
-        p.model?.toUpperCase() === q.toUpperCase()
-      );
-      setHasExactMatch(hasExact);
-    } else {
-      setHasExactMatch(true);
+    try {
+      setLoadingProducts(true);
+      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
+      setProducts(r.data.items);
+      setTotal(r.data.total || 0);
+      setPage(pageNum);
+      
+      if (q) {
+        const hasExact = r.data.items?.some(p => 
+          p.partName?.toUpperCase() === q.toUpperCase() || 
+          p.partCode?.toUpperCase() === q.toUpperCase() ||
+          p.model?.toUpperCase() === q.toUpperCase()
+        );
+        setHasExactMatch(hasExact);
+      } else {
+        setHasExactMatch(true);
+      }
+    } catch (err) {
+      console.error('Failed to load products:', err);
+    } finally {
+      setLoadingProducts(false);
     }
   }
 
   async function loadReturns() {
     try {
+      setLoadingReturns(true);
       const r = await api.get('/returns');
       setReturns(r.data || []);
     } catch (err) {
       console.error('Failed to load returns:', err);
+    } finally {
+      setLoadingReturns(false);
     }
   }
 
@@ -55,12 +70,15 @@ export default function AdminDashboard() {
     body.bookingPrice = Number(body.bookingPrice || 0);
     body.minOrderQty = Number(body.minOrderQty || 1);
     try {
+      setAddingProduct(true);
       await api.post('/products', body);
       setShowAddProduct(false);
       e.currentTarget.reset();
       await load(1);
     } catch (err) {
       alert('Failed to add product: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setAddingProduct(false);
     }
   }
 
@@ -82,8 +100,13 @@ export default function AdminDashboard() {
     const form = new FormData(e.currentTarget);
     const body = Object.fromEntries(form.entries());
     body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty);
-    await api.put(`/products/${editing._id}`, body);
-    setEditing(null); await load(page);
+    try {
+      setSavingEdit(true);
+      await api.put(`/products/${editing._id}`, body);
+      setEditing(null); await load(page);
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   const totalPages = Math.ceil(total / limit);
@@ -103,9 +126,9 @@ export default function AdminDashboard() {
         <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
         <button onClick={() => setShowAddProduct(true)} className="rounded-2xl bg-brand-red text-white px-6 flex items-center gap-2"><Plus size={18}/>Add Product</button>
       </div>
-      {q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match found for "{q}", but showing relevant results:</div>}
-      {q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
-      <ProductTable products={products} onDetail={setSelected} onEdit={setEditing} />
+      {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match found for "{q}", but showing relevant results:</div>}
+      {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
+      {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable products={products} onDetail={setSelected} onEdit={setEditing} />}
       
       {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
         <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
@@ -125,7 +148,9 @@ export default function AdminDashboard() {
 
     {tab === 'returns' && <>
       <div className="rounded-3xl bg-white shadow-soft overflow-hidden">
-        {returns.length === 0 ? (
+        {loadingReturns ? (
+          <LoadingState label="Loading returns..." />
+        ) : returns.length === 0 ? (
           <div className="p-8 text-center text-slate-500">No returns found</div>
         ) : (
           <table className="w-full text-sm">
@@ -160,7 +185,10 @@ export default function AdminDashboard() {
     {editing && <Modal title="Edit Product" onClose={()=>setEditing(null)}><form onSubmit={saveEdit} className="grid grid-cols-2 gap-4">
       {['partName','partCode','model','bookingPrice','mrp','quantity','minOrderQty'].map(k=><label key={k} className="text-sm font-medium">{k}<input name={k} defaultValue={editing[k]} className="mt-1 w-full rounded-xl border p-3" /></label>)}
       <label className="col-span-2 text-sm font-medium">description<textarea name="description" defaultValue={editing.description} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <button className="col-span-2 rounded-xl bg-brand-red text-white py-3 font-bold">Save Changes</button>
+      <button disabled={savingEdit} className="col-span-2 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+        {savingEdit && <ButtonSpinner />}
+        {savingEdit ? 'Saving...' : 'Save Changes'}
+      </button>
     </form></Modal>}
     {showAddProduct && <Modal title="Add New Product" onClose={()=>setShowAddProduct(false)}><form onSubmit={handleAddProduct} className="grid gap-4">
       <div className="grid grid-cols-2 gap-4">
@@ -174,8 +202,11 @@ export default function AdminDashboard() {
       </div>
       <label className="text-sm font-medium">Description<textarea name="description" placeholder="Product description..." className="mt-1 w-full rounded-xl border p-3" rows="3" /></label>
       <div className="flex gap-3">
-        <button type="submit" className="flex-1 rounded-xl bg-brand-red text-white py-3 font-bold">Add Product</button>
-        <button type="button" onClick={()=>setShowAddProduct(false)} className="flex-1 rounded-xl border py-3 font-bold">Cancel</button>
+        <button type="submit" disabled={addingProduct} className="flex-1 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          {addingProduct && <ButtonSpinner />}
+          {addingProduct ? 'Adding...' : 'Add Product'}
+        </button>
+        <button type="button" disabled={addingProduct} onClick={()=>setShowAddProduct(false)} className="flex-1 rounded-xl border py-3 font-bold disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
       </div>
     </form></Modal>}
   </Layout>;
