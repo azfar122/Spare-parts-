@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "installCommand": "npm install",
   "buildCommand": "npm -C frontend run build",
   "outputDirectory": "frontend/dist",
   "framework": null,

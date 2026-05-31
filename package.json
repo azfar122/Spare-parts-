@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm -C frontend run dev\" \"npm -C api run dev\"",
-    "build": "npm -C api run build && npm -C frontend run build",
+    "build": "npm -C frontend run build",
     "start": "npm -C api run start"
   },
   "devDependencies": {
