@@ -4,7 +4,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import http from 'http';
 import { Server } from 'socket.io';
-import { connectDb } from './utils/db.js';
+import { connectDb, getDbReadyState } from './utils/db.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -23,8 +23,29 @@ app.use(cors({ origin: process.env.CLIENT_URL || process.env.VERCEL_URL || 'http
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
-app.get('/health', (_, res) => res.json({ ok: true }));
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+const health = (_, res) => res.json({
+  ok: true,
+  mongoConfigured: Boolean(process.env.MONGO_URI),
+  jwtConfigured: Boolean(process.env.JWT_SECRET),
+  mongoReadyState: getDbReadyState()
+});
+
+async function requireDb(_, res, next) {
+  try {
+    await connectDb();
+    next();
+  } catch (error) {
+    console.error('Database connection failed:', error);
+    res.status(500).json({
+      message: 'Database connection failed',
+      detail: error.message
+    });
+  }
+}
+
+app.get('/health', health);
+app.get('/api/health', health);
+app.use('/api', requireDb);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
@@ -36,13 +57,16 @@ io.on('connection', socket => {
   console.log('Socket connected', socket.id);
 });
 
-await connectDb();
-
 // For local development
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 5001;
   server.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
 }
+
+app.use((error, _, res, __) => {
+  console.error('Unhandled API error:', error);
+  res.status(500).json({ message: 'Internal server error', detail: error.message });
+});
 
 export default app;
 export { server, io };

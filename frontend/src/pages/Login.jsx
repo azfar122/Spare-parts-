@@ -14,7 +14,7 @@ export default function Login() {
   async function submit(e) {
     e.preventDefault(); setError('');
     try { const user = await login(username, password); navigate(user.role === 'admin' ? '/admin' : '/sales'); }
-    catch { setError('Invalid username or password'); }
+    catch (err) { setError(err.response?.data?.message || 'Invalid username or password'); }
   }
 
   return <div className="min-h-screen grid lg:grid-cols-2 bg-white">
