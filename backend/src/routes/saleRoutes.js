@@ -2,6 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
+import Customer from '../models/Customer.js';
+import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -29,7 +31,7 @@ router.get('/', requireRole('admin'), async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
   const [sales, total] = await Promise.all([
-    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email'),
+    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email').populate('customer', 'name phone currentBalance'),
     Sale.countDocuments(filter)
   ]);
   res.json({ items: sales, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
@@ -39,12 +41,19 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { items, customerName } = req.body;
-    if (!items?.length) return res.status(400).json({ message: 'No items selected' });
+    const { items, customerName, customerId, paymentStatus = 'paid' } = req.body;
+    if (!items?.length) throw new Error('No items selected');
+    if (!['paid', 'unpaid', 'partial'].includes(paymentStatus)) throw new Error('Invalid payment status');
 
     const saleItems = [];
     let subtotal = 0;
     let discountTotal = 0;
+    let customer = null;
+
+    if (customerId) {
+      customer = await Customer.findById(customerId).session(session);
+      if (!customer) throw new Error('Customer not found');
+    }
 
     for (const item of items) {
       const product = await Product.findById(item.productId).session(session);
@@ -63,8 +72,44 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       saleItems.push({ product: product._id, partName: product.partName, partCode: product.partCode, model: product.model, qty, price, discount, lineTotal });
     }
 
+    const grandTotal = subtotal - discountTotal;
+    const requestedPaidAmount = Number(req.body.paidAmount || 0);
+    let paidAmount = paymentStatus === 'paid' ? grandTotal : 0;
+    if (paymentStatus === 'partial') {
+      if (requestedPaidAmount <= 0 || requestedPaidAmount >= grandTotal) throw new Error('Partial payment must be greater than zero and less than the total');
+      paidAmount = requestedPaidAmount;
+    }
+    const dueAmount = Math.max(0, grandTotal - paidAmount);
+    if (dueAmount > 0 && !customer) throw new Error('Select an existing customer before adding unpaid balance');
+
     const receiptNo = `R-${Date.now()}`;
-    const [sale] = await Sale.create([{ receiptNo, items: saleItems, subtotal, discountTotal, grandTotal: subtotal - discountTotal, customerName, soldBy: req.user._id }], { session });
+    const [sale] = await Sale.create([{
+      receiptNo,
+      items: saleItems,
+      subtotal,
+      discountTotal,
+      grandTotal,
+      customer: customer?._id,
+      customerName: customer?.name || customerName || 'Walk-in Customer',
+      paymentStatus,
+      paidAmount,
+      dueAmount,
+      soldBy: req.user._id
+    }], { session });
+
+    if (customer) {
+      await addLedgerEntry({
+        customer,
+        type: 'sale',
+        sale: sale._id,
+        description: `Sale bill ${receiptNo}`,
+        debit: grandTotal,
+        credit: paidAmount,
+        userId: req.user._id,
+        session
+      });
+    }
+
     await session.commitTransaction();
     req.app.get('io').emit('inventory:bulk-update');
     res.status(201).json(sale);

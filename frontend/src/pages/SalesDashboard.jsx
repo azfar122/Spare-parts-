@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -12,6 +12,12 @@ export default function SalesDashboard() {
   const [q, setQ] = useState('');
   const [cart, setCart] = useState([]);
   const [receipt, setReceipt] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerMode, setCustomerMode] = useState('walk-in');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [paidAmount, setPaidAmount] = useState('');
   const [returnForm, setReturnForm] = useState(false);
   const [returnSearch, setReturnSearch] = useState('');
   const [returnSelectedProduct, setReturnSelectedProduct] = useState(null);
@@ -47,7 +53,13 @@ export default function SalesDashboard() {
     }
   }
 
+  async function loadCustomers(search = customerSearch) {
+    const r = await api.get('/customers', { params: { q: search, limit: 20 } });
+    setCustomers(r.data.items || []);
+  }
+
   useEffect(() => { load(1); }, [q]);
+  useEffect(() => { loadCustomers(''); }, []);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
     s.on('inventory:update', () => load(page));
@@ -61,9 +73,24 @@ export default function SalesDashboard() {
 
   async function checkout() {
     try {
+      if (customerMode === 'existing' && !selectedCustomer) return alert('Select a customer for this bill');
+      if (customerMode === 'walk-in' && paymentStatus !== 'paid') return alert('Unpaid or partial bills must be linked to an existing customer');
       setCheckoutLoading(true);
-      const r = await api.post('/sales', { customerName: 'Walk-in Customer', items: cart });
-      setReceipt(r.data); setCart([]); await load(page);
+      const r = await api.post('/sales', {
+        customerName: selectedCustomer?.name || 'Walk-in Customer',
+        customerId: customerMode === 'existing' ? selectedCustomer?._id : undefined,
+        paymentStatus,
+        paidAmount: paymentStatus === 'partial' ? Number(paidAmount || 0) : undefined,
+        items: cart
+      });
+      setReceipt(r.data);
+      setCart([]);
+      setCustomerMode('walk-in');
+      setSelectedCustomer(null);
+      setCustomerSearch('');
+      setPaymentStatus('paid');
+      setPaidAmount('');
+      await load(page);
     } finally {
       setCheckoutLoading(false);
     }
@@ -96,6 +123,8 @@ export default function SalesDashboard() {
   }
 
   const totalPages = Math.ceil(total / limit);
+  const billTotal = totals.sub - totals.dis;
+  const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
 
   return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns.">
     <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -141,7 +170,51 @@ export default function SalesDashboard() {
           <div className="border-t pt-4 text-sm">
             <div className="flex justify-between"><span>Subtotal</span><b>Rs {totals.sub.toLocaleString()}</b></div>
             <div className="flex justify-between"><span>Discount</span><b>Rs {totals.dis.toLocaleString()}</b></div>
-            <div className="flex justify-between text-lg"><span>Total</span><b>Rs {(totals.sub-totals.dis).toLocaleString()}</b></div>
+            <div className="flex justify-between text-lg"><span>Total</span><b>Rs {billTotal.toLocaleString()}</b></div>
+          </div>
+          <div className="border-t pt-4 space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Customer</label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => { setCustomerMode('walk-in'); setSelectedCustomer(null); setPaymentStatus('paid'); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${customerMode === 'walk-in' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Walk-in</button>
+                <button type="button" onClick={() => { setCustomerMode('existing'); loadCustomers(''); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${customerMode === 'existing' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Existing</button>
+              </div>
+            </div>
+            {customerMode === 'existing' && <div>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); loadCustomers(e.target.value); }} placeholder="Search customer name or phone" className="w-full rounded-xl border py-2 pl-9 pr-3 text-sm" />
+              </div>
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border bg-white">
+                {customers.map(customer => (
+                  <button key={customer._id} type="button" onClick={() => setSelectedCustomer(customer)} className={`w-full text-left p-3 border-b last:border-b-0 hover:bg-slate-50 ${selectedCustomer?._id === customer._id ? 'bg-slate-50' : ''}`}>
+                    <div className="flex justify-between gap-2">
+                      <span className="font-semibold text-sm">{customer.name}</span>
+                      <span className="text-xs font-semibold text-brand-red">Rs {Number(customer.currentBalance || 0).toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">{customer.phone || 'No phone'}</p>
+                  </button>
+                ))}
+                {customers.length === 0 && <p className="p-3 text-sm text-slate-500">No customers found.</p>}
+              </div>
+              {selectedCustomer && <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">Selected: <b>{selectedCustomer.name}</b> · Current balance Rs {Number(selectedCustomer.currentBalance || 0).toLocaleString()}</p>}
+            </div>}
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Payment</label>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {[
+                  ['paid', 'Received'],
+                  ['unpaid', 'Not Received'],
+                  ['partial', 'Partial']
+                ].map(([value, label]) => (
+                  <button key={value} type="button" disabled={customerMode === 'walk-in' && value !== 'paid'} onClick={() => setPaymentStatus(value)} className={`rounded-xl border px-2 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${paymentStatus === value ? 'bg-brand-red text-white' : 'hover:bg-slate-50'}`}>{label}</button>
+                ))}
+              </div>
+            </div>
+            {paymentStatus === 'partial' && <input type="number" min="1" max={billTotal - 1} value={paidAmount} onChange={e => setPaidAmount(e.target.value)} placeholder="Paid amount" className="w-full rounded-xl border p-2 text-sm" />}
+            {customerMode === 'existing' && paymentStatus !== 'paid' && <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              Due added to khata: <b>Rs {duePreview.toLocaleString()}</b>
+            </div>}
           </div>
           <button onClick={checkout} disabled={checkoutLoading} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
             {checkoutLoading && <ButtonSpinner />}
@@ -156,6 +229,8 @@ export default function SalesDashboard() {
         <h2 className="text-2xl font-black">PartsPro Receipt</h2>
         <p>Receipt: {receipt.receiptNo}</p>
         <p>Date: {new Date(receipt.createdAt).toLocaleString()}</p>
+        <p>Customer: {receipt.customerName}</p>
+        <p>Payment: {receipt.paymentStatus} · Paid Rs {Number(receipt.paidAmount || 0).toLocaleString()} · Due Rs {Number(receipt.dueAmount || 0).toLocaleString()}</p>
         <table className="w-full mt-4 text-sm">
           <tbody>
             {receipt.items.map((i,idx)=><tr key={idx} className="border-t"><td className="py-2">{i.partName}<br/><span className="text-xs">{i.partCode}</span></td><td>{i.qty}</td><td>Rs {i.price}</td><td>Rs {i.lineTotal}</td></tr>)}

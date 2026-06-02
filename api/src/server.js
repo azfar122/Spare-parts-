@@ -11,6 +11,7 @@ import productRoutes from './routes/productRoutes.js';
 import saleRoutes from './routes/saleRoutes.js';
 import returnRoutes from './routes/returnRoutes.js';
 import purchaseOrderRoutes from './routes/purchaseOrderRoutes.js';
+import customerRoutes from './routes/customerRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/returns', returnRoutes);
 

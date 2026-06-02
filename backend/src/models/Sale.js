@@ -17,7 +17,11 @@ const saleSchema = new mongoose.Schema({
   subtotal: Number,
   discountTotal: Number,
   grandTotal: Number,
+  customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
   customerName: { type: String, default: 'Walk-in Customer' },
+  paymentStatus: { type: String, enum: ['paid', 'unpaid', 'partial'], default: 'paid' },
+  paidAmount: { type: Number, default: 0 },
+  dueAmount: { type: Number, default: 0 },
   soldBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
