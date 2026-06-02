@@ -5,8 +5,8 @@ import { connectDb } from './db.js';
 
 await connectDb();
 const users = [
-  { name: 'Admin', username: 'admin', email: 'admin@spares.local', password: 'admin123', role: 'admin' },
-  { name: 'Sales User', username: 'sales', email: 'sales@spares.local', password: 'sales123', role: 'sales' }
+  { name: 'Admin', username: 'admin', email: 'admin@spares.local', password: 'Admin@12345', role: 'admin' },
+  { name: 'Sales User', username: 'sales', email: 'sales@spares.local', password: 'Sales@12345', role: 'sales' }
 ];
 for (const u of users) {
   const passwordHash = await bcrypt.hash(u.password, 10);
@@ -16,5 +16,5 @@ for (const u of users) {
     { upsert: true }
   );
 }
-console.log('✓ Seeded users: admin/admin123, sales/sales123');
+console.log('Seeded users: admin/Admin@12345, sales/Sales@12345');
 process.exit(0);

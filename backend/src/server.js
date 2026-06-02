@@ -14,12 +14,25 @@ import purchaseOrderRoutes from './routes/purchaseOrderRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
+const configuredClientUrl = process.env.CLIENT_URL || process.env.VERCEL_URL || 'http://localhost:5173';
+const clientOrigin = configuredClientUrl.replace(/\/+$/, '');
+const localTwinOrigin = clientOrigin.includes('localhost')
+  ? clientOrigin.replace('localhost', '127.0.0.1')
+  : clientOrigin.replace('127.0.0.1', 'localhost');
+const allowedOrigins = [...new Set([clientOrigin, localTwinOrigin])];
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
+  credentials: true
+};
 const io = new Server(server, {
-  cors: { origin: process.env.CLIENT_URL || process.env.VERCEL_URL || 'http://localhost:5173', credentials: true }
+  cors: { origin: allowedOrigins, credentials: true }
 });
 
 app.set('io', io);
-app.use(cors({ origin: process.env.CLIENT_URL || process.env.VERCEL_URL || 'http://localhost:5173', credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 

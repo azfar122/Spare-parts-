@@ -17,7 +17,7 @@ export default function Login() {
     e.preventDefault(); setError('');
     setSubmitting(true);
     try { const user = await login(username, password); navigate(user.role === 'admin' ? '/admin' : '/sales'); }
-    catch (err) { setError(err.response?.data?.message || 'Invalid username or password'); }
+    catch (err) { setError(err.response?.data?.message || 'Could not reach the API. Check that the backend is running on port 5001.'); }
     finally { setSubmitting(false); }
   }
 
