@@ -6,7 +6,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const { q = '', page = 1, limit = 25, lowStock } = req.query;
+  const { q = '', page = 1, limit = 25, lowStock, inStock } = req.query;
   const filter = { active: true };
   if (q) filter.$or = [
     { partName: new RegExp(q, 'i') },
@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
     { model: new RegExp(q, 'i') }
   ];
   if (lowStock === 'true') filter.quantity = { $lte: 5 };
+  if (inStock === 'true') filter.quantity = { $gt: 0 };
   const skip = (Number(page) - 1) * Number(limit);
   const [items, total] = await Promise.all([
     Product.find(filter).sort({ partName: 1 }).skip(skip).limit(Number(limit)),

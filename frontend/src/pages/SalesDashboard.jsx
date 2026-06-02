@@ -1,17 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, Search, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
+import ShopReceipt from '../components/ShopReceipt.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
+
+const cartFieldOrder = ['qty', 'price', 'discount'];
 
 export default function SalesDashboard() {
   const [products, setProducts] = useState([]);
   const [q, setQ] = useState('');
   const [cart, setCart] = useState([]);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
+  const [selectedCart, setSelectedCart] = useState({ row: -1, field: 'qty' });
   const [receipt, setReceipt] = useState(null);
+  const [inStockOnly, setInStockOnly] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerMode, setCustomerMode] = useState('walk-in');
@@ -28,12 +34,14 @@ export default function SalesDashboard() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnSaving, setReturnSaving] = useState(false);
+  const cartFieldRefs = useRef({});
 
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined } });
       setProducts(r.data.items);
+      setSelectedProductIndex(r.data.items?.length ? 0 : -1);
       setTotal(r.data.total || 0);
       setPage(pageNum);
       
@@ -58,7 +66,7 @@ export default function SalesDashboard() {
     setCustomers(r.data.items || []);
   }
 
-  useEffect(() => { load(1); }, [q]);
+  useEffect(() => { load(1); }, [q, inStockOnly]);
   useEffect(() => { loadCustomers(''); }, []);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
@@ -70,6 +78,60 @@ export default function SalesDashboard() {
   function addSale(p) { setCart(c => c.some(i=>i.productId===p._id) ? c : [...c, { productId: p._id, partName: p.partName, partCode: p.partCode, qty: 1, price: p.mrp, discount: 0, stock: p.quantity }]); }
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
   const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
+
+  function moveProductSelection(delta) {
+    setSelectedProductIndex(current => {
+      if (!products.length) return -1;
+      const next = Math.min(products.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta));
+      return next;
+    });
+  }
+
+  function addSelectedProduct() {
+    const product = products[selectedProductIndex];
+    if (product && product.quantity > 0) addSale(product);
+  }
+
+  function focusCartField(row, field) {
+    const safeRow = Math.min(cart.length - 1, Math.max(0, row));
+    if (safeRow < 0) return;
+    setSelectedCart({ row: safeRow, field });
+    window.requestAnimationFrame(() => cartFieldRefs.current[`${safeRow}-${field}`]?.focus());
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveProductSelection(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveProductSelection(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      addSelectedProduct();
+    }
+  }
+
+  function handleCartKeyDown(e, row, field) {
+    const fieldIndex = cartFieldOrder.indexOf(field);
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      focusCartField(row, cartFieldOrder[Math.max(0, fieldIndex - 1)]);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      focusCartField(row, cartFieldOrder[Math.min(cartFieldOrder.length - 1, fieldIndex + 1)]);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusCartField(row - 1, field);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusCartField(row + 1, field);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (fieldIndex < cartFieldOrder.length - 1) focusCartField(row, cartFieldOrder[fieldIndex + 1]);
+      else if (row < cart.length - 1) focusCartField(row + 1, cartFieldOrder[0]);
+    }
+  }
 
   async function checkout() {
     try {
@@ -131,15 +193,27 @@ export default function SalesDashboard() {
       <div>
         <div className="mb-5 flex gap-3">
           <div className="flex-1 relative">
-            <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(1)} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
+            <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
           </div>
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
+          <button onClick={() => setInStockOnly(value => !value)} className={`rounded-2xl border px-5 flex items-center gap-2 font-medium ${inStockOnly ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'hover:bg-slate-50'}`}>
+            <Filter size={18}/>{inStockOnly ? 'In Stock' : 'All Stock'}
+          </button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
         </div>
+        {inStockOnly && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Showing products with quantity greater than 0.</div>}
         {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
         {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
-        {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable products={products} salesMode onAddSale={addSale} onDetail={()=>{}} />}
+        {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable
+          products={products}
+          salesMode
+          selectedIndex={selectedProductIndex}
+          onSelectIndex={setSelectedProductIndex}
+          onMoveSelection={moveProductSelection}
+          onAddSale={addSale}
+          onDetail={()=>{}}
+        />}
         {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
           <div className="flex items-center gap-2">
@@ -158,13 +232,13 @@ export default function SalesDashboard() {
       <aside className="rounded-3xl bg-white p-5 shadow-soft border h-fit sticky top-5">
         <h3 className="text-xl font-bold mb-4">Current Bill</h3>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
-          {cart.map((i,idx)=><div key={i.productId} className="rounded-2xl bg-slate-50 p-3">
+          {cart.map((i,idx)=><div key={i.productId} className={`rounded-2xl p-3 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
             <div className="font-semibold">{i.partName}</div>
             <div className="text-xs text-slate-500">{i.partCode} · Stock {i.stock}</div>
             <div className="grid grid-cols-3 gap-2 mt-3">
-              <div><label className="text-xs text-slate-600">Qty</label><input min="1" max={i.stock} value={i.qty} onChange={e=>update(idx,'qty',e.target.value)} className="mt-1 w-full rounded-xl border p-2" /></div>
-              <div><label className="text-xs text-slate-600">Price</label><input value={i.price} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2" /></div>
-              <div><label className="text-xs text-slate-600">Discount</label><input value={i.discount} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2" /></div>
+              <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={i.stock} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>update(idx,'qty',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
+              <div><label className="text-xs text-slate-600">Price</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
+              <div><label className="text-xs text-slate-600">Discount</label><input ref={node => { cartFieldRefs.current[`${idx}-discount`] = node; }} value={i.discount} onFocus={() => setSelectedCart({ row: idx, field: 'discount' })} onKeyDown={e => handleCartKeyDown(e, idx, 'discount')} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
             </div>
           </div>)}
           <div className="border-t pt-4 text-sm">
@@ -225,19 +299,7 @@ export default function SalesDashboard() {
     </div>
     
     {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)}>
-      <div id="receipt-print" className="p-3">
-        <h2 className="text-2xl font-black">PartsPro Receipt</h2>
-        <p>Receipt: {receipt.receiptNo}</p>
-        <p>Date: {new Date(receipt.createdAt).toLocaleString()}</p>
-        <p>Customer: {receipt.customerName}</p>
-        <p>Payment: {receipt.paymentStatus} · Paid Rs {Number(receipt.paidAmount || 0).toLocaleString()} · Due Rs {Number(receipt.dueAmount || 0).toLocaleString()}</p>
-        <table className="w-full mt-4 text-sm">
-          <tbody>
-            {receipt.items.map((i,idx)=><tr key={idx} className="border-t"><td className="py-2">{i.partName}<br/><span className="text-xs">{i.partCode}</span></td><td>{i.qty}</td><td>Rs {i.price}</td><td>Rs {i.lineTotal}</td></tr>)}
-          </tbody>
-        </table>
-        <h3 className="text-right text-xl font-bold mt-4">Total: Rs {receipt.grandTotal}</h3>
-      </div>
+      <ShopReceipt receipt={receipt} />
       <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
     </Modal>}
     

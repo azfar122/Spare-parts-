@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -18,6 +18,7 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState('inventory');
   const [returns, setReturns] = useState([]);
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [inStockOnly, setInStockOnly] = useState(false);
   const [hasExactMatch, setHasExactMatch] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -27,7 +28,7 @@ export default function AdminDashboard() {
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined } });
       setProducts(r.data.items);
       setTotal(r.data.total || 0);
       setPage(pageNum);
@@ -82,7 +83,7 @@ export default function AdminDashboard() {
     }
   }
 
-  useEffect(() => { load(1); }, [q]);
+  useEffect(() => { load(1); }, [q, inStockOnly]);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
     s.on('inventory:update', () => load(page));
@@ -124,8 +125,12 @@ export default function AdminDashboard() {
           {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
         </div>
         <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
+        <button onClick={() => setInStockOnly(value => !value)} className={`rounded-2xl border px-5 flex items-center gap-2 font-medium ${inStockOnly ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'hover:bg-slate-50'}`}>
+          <Filter size={18}/>{inStockOnly ? 'In Stock' : 'All Stock'}
+        </button>
         <button onClick={() => setShowAddProduct(true)} className="rounded-2xl bg-brand-red text-white px-6 flex items-center gap-2"><Plus size={18}/>Add Product</button>
       </div>
+      {inStockOnly && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Showing products with quantity greater than 0.</div>}
       {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match found for "{q}", but showing relevant results:</div>}
       {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
       {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable products={products} onDetail={setSelected} onEdit={setEditing} />}
