@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
 import Return from '../models/Return.js';
+import WarehouseStock from '../models/WarehouseStock.js';
 import Customer from '../models/Customer.js';
 import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -96,15 +97,52 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       const qty = Number(item.qty);
       const discount = Number(item.discount || 0);
       if (qty <= 0) throw new Error('Invalid quantity');
-      if (product.quantity < qty) throw new Error(`Not enough stock for ${product.partCode}`);
+
+      const inventoryQtyUsed = Math.min(Number(product.quantity || 0), qty);
+      const warehouseQtyNeeded = qty - inventoryQtyUsed;
+      let warehouseStock = null;
+      let warehouseQtyUsed = 0;
+      let warehouseName = '';
+
+      if (warehouseQtyNeeded > 0) {
+        if (!item.warehouseId) throw new Error(`Select a warehouse for ${product.partCode}. Main inventory is short by ${warehouseQtyNeeded}`);
+        warehouseStock = await WarehouseStock.findOne({ warehouse: item.warehouseId, product: product._id })
+          .populate('warehouse', 'name')
+          .session(session);
+        if (!warehouseStock || Number(warehouseStock.quantity || 0) < warehouseQtyNeeded) {
+          throw new Error(`Selected warehouse does not have enough stock for ${product.partCode}`);
+        }
+        warehouseQtyUsed = warehouseQtyNeeded;
+        warehouseName = warehouseStock.warehouse?.name || '';
+      }
+
       const price = Number(item.price ?? product.mrp);
       const gross = price * qty;
       const lineTotal = Math.max(0, gross - discount);
       subtotal += gross;
       discountTotal += discount;
-      product.quantity -= qty;
+      product.quantity -= inventoryQtyUsed;
       await product.save({ session });
-      saleItems.push({ product: product._id, partName: product.partName, partCode: product.partCode, model: product.model, qty, price, discount, lineTotal });
+
+      if (warehouseStock && warehouseQtyUsed > 0) {
+        warehouseStock.quantity -= warehouseQtyUsed;
+        await warehouseStock.save({ session });
+      }
+
+      saleItems.push({
+        product: product._id,
+        partName: product.partName,
+        partCode: product.partCode,
+        model: product.model,
+        qty,
+        price,
+        discount,
+        inventoryQtyUsed,
+        warehouseQtyUsed,
+        warehouse: warehouseStock?.warehouse?._id,
+        warehouseName,
+        lineTotal
+      });
     }
 
     const grandTotal = subtotal - discountTotal;

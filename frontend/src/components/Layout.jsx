@@ -1,4 +1,4 @@
-import { BookOpen, LogOut, ShieldCheck, Store, BarChart3, Package } from 'lucide-react';
+import { BookOpen, Building2, LogOut, ShieldCheck, Store, BarChart3, Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -24,6 +24,9 @@ export default function Layout({ title, subtitle, children }) {
               </Link>
               <Link to="/admin/customers" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/customers' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
                 <BookOpen size={16}/>Khata
+              </Link>
+              <Link to="/admin/warehouses" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/warehouses' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Building2 size={16}/>Warehouse
               </Link>
               <Link to="/admin/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
                 <Package size={16}/>Orders

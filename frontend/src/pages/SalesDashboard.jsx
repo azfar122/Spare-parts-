@@ -5,6 +5,7 @@ import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
 import ShopReceipt from '../components/ShopReceipt.jsx';
+import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -19,6 +20,7 @@ export default function SalesDashboard() {
   const [receipt, setReceipt] = useState(null);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [customers, setCustomers] = useState([]);
+  const [warehouseOptions, setWarehouseOptions] = useState({});
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerMode, setCustomerMode] = useState('walk-in');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -40,12 +42,13 @@ export default function SalesDashboard() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnSaving, setReturnSaving] = useState(false);
+  const [notice, setNotice] = useState(null);
   const cartFieldRefs = useRef({});
 
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined, includeWarehouseStock: 'true' } });
       setProducts(r.data.items);
       setSelectedProductIndex(r.data.items?.length ? 0 : -1);
       setTotal(r.data.total || 0);
@@ -81,8 +84,36 @@ export default function SalesDashboard() {
     return () => s.disconnect();
   }, [page]);
 
-  function addSale(p) { setCart(c => c.some(i=>i.productId===p._id) ? c : [...c, { productId: p._id, partName: p.partName, partCode: p.partCode, qty: 1, price: p.mrp, discount: 0, stock: p.quantity }]); }
+  async function loadWarehouseOptions(productId) {
+    if (warehouseOptions[productId]) return;
+    const r = await api.get(`/warehouses/product/${productId}/stock`);
+    setWarehouseOptions(options => ({ ...options, [productId]: r.data || [] }));
+  }
+
+  function addSale(p) {
+    setCart(c => c.some(i=>i.productId===p._id) ? c : [...c, {
+      productId: p._id,
+      partName: p.partName,
+      partCode: p.partCode,
+      qty: 1,
+      price: p.mrp,
+      discount: 0,
+      stock: p.quantity,
+      warehouseQuantity: p.warehouseQuantity || 0,
+      warehouseId: ''
+    }]);
+    if (Number(p.quantity || 0) <= 0 && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
+  }
+
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
+  function updateCartQty(index, value, item) {
+    const qty = Number(value) || 0;
+    setCart(c => c.map((x, idx) => idx === index ? { ...x, qty, warehouseId: qty <= Number(x.stock || 0) ? '' : x.warehouseId } : x));
+    if (qty > Number(item.stock || 0)) loadWarehouseOptions(item.productId);
+  }
+  function updateCartWarehouse(index, warehouseId) {
+    setCart(c => c.map((x, idx) => idx === index ? { ...x, warehouseId } : x));
+  }
   const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
 
   function clearCurrentBill() {
@@ -105,7 +136,7 @@ export default function SalesDashboard() {
 
   function addSelectedProduct() {
     const product = products[selectedProductIndex];
-    if (product && product.quantity > 0) addSale(product);
+    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
   }
 
   function focusCartField(row, field) {
@@ -151,15 +182,17 @@ export default function SalesDashboard() {
 
   async function checkout() {
     try {
-      if (customerMode === 'existing' && !selectedCustomer) return alert('Select a customer for this bill');
-      if (customerMode === 'walk-in' && paymentStatus !== 'paid') return alert('Unpaid or partial bills must be linked to an existing customer');
+      if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer for this bill.' });
+      if (customerMode === 'walk-in' && paymentStatus !== 'paid') return setNotice({ type: 'error', title: 'Customer Required', message: 'Unpaid or partial bills must be linked to an existing customer.' });
+      const itemMissingWarehouse = cart.find(item => Number(item.qty || 0) > Number(item.stock || 0) && !item.warehouseId);
+      if (itemMissingWarehouse) return setNotice({ type: 'error', title: 'Warehouse Required', message: `Select a warehouse for ${itemMissingWarehouse.partCode}.` });
       setCheckoutLoading(true);
       const r = await api.post('/sales', {
         customerName: selectedCustomer?.name || 'Walk-in Customer',
         customerId: customerMode === 'existing' ? selectedCustomer?._id : undefined,
         paymentStatus,
         paidAmount: paymentStatus === 'partial' ? Number(paidAmount || 0) : undefined,
-        items: cart
+        items: cart.map(item => ({ ...item, warehouseId: item.warehouseId || undefined }))
       });
       setReceipt(r.data);
       setCart([]);
@@ -242,7 +275,7 @@ export default function SalesDashboard() {
       await api.post('/returns', body);
       resetReturnState();
       await load(page);
-      alert('Return saved and stock updated');
+      setNotice({ type: 'success', title: 'Return Saved', message: 'Return saved and stock updated.' });
     } catch (err) {
       setReturnError(err.response?.data?.message || err.message);
     } finally {
@@ -255,6 +288,7 @@ export default function SalesDashboard() {
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
 
   return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns.">
+    <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid lg:grid-cols-[1fr_420px] gap-6">
       <div>
         <div className="mb-5 flex gap-3">
@@ -301,15 +335,29 @@ export default function SalesDashboard() {
           {cart.length > 0 && <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>}
         </div>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
-          {cart.map((i,idx)=><div key={i.productId} className={`rounded-2xl p-3 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
+          {cart.map((i,idx)=>{
+            const shortageQty = Math.max(0, Number(i.qty || 0) - Number(i.stock || 0));
+            const availableWarehouseOptions = warehouseOptions[i.productId] || [];
+            return <div key={i.productId} className={`rounded-2xl p-3 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
             <div className="font-semibold">{i.partName}</div>
-            <div className="text-xs text-slate-500">{i.partCode} · Stock {i.stock}</div>
+            <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · Warehouse {i.warehouseQuantity || 0}</div>
             <div className="grid grid-cols-3 gap-2 mt-3">
-              <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={i.stock} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>update(idx,'qty',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
+              <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={Number(i.stock || 0) + Number(i.warehouseQuantity || 0)} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>updateCartQty(idx,e.target.value,i)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Price</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Discount</label><input ref={node => { cartFieldRefs.current[`${idx}-discount`] = node; }} value={i.discount} onFocus={() => setSelectedCart({ row: idx, field: 'discount' })} onKeyDown={e => handleCartKeyDown(e, idx, 'discount')} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
             </div>
-          </div>)}
+            {shortageQty > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <label className="text-xs font-semibold text-amber-800">Main stock short by {shortageQty}. Select warehouse source.</label>
+              <select value={i.warehouseId || ''} onChange={e => updateCartWarehouse(idx, e.target.value)} className="mt-2 w-full rounded-xl border bg-white p-2 text-sm">
+                <option value="">Choose warehouse</option>
+                {availableWarehouseOptions.map(stock => (
+                  <option key={stock.warehouse._id} value={stock.warehouse._id}>{stock.warehouse.name} · available {stock.quantity}</option>
+                ))}
+              </select>
+              {availableWarehouseOptions.length === 0 && <p className="mt-2 text-xs text-amber-800">No warehouse stock available for this product.</p>}
+            </div>}
+          </div>;
+          })}
           <div className="border-t pt-4 text-sm">
             <div className="flex justify-between"><span>Subtotal</span><b>Rs {totals.sub.toLocaleString()}</b></div>
             <div className="flex justify-between"><span>Discount</span><b>Rs {totals.dis.toLocaleString()}</b></div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -17,6 +18,7 @@ export default function PurchaseOrders() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [receivingItems, setReceivingItems] = useState(false);
+  const [notice, setNotice] = useState(null);
   const limit = 50;
 
   const [formData, setFormData] = useState({
@@ -72,8 +74,9 @@ export default function PurchaseOrders() {
       setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }], notes: '' });
       setShowForm(false);
       await loadOrders(1);
+      setNotice({ type: 'success', title: 'Order Created', message: 'Purchase order created successfully.' });
     } catch (err) {
-      alert('Error creating order: ' + err.message);
+      setNotice({ type: 'error', title: 'Create Order Failed', message: err.response?.data?.message || err.message });
     } finally {
       setCreatingOrder(false);
     }
@@ -95,8 +98,9 @@ export default function PurchaseOrders() {
       setSelectedOrder(updated.data);
       setReceiveForm(null);
       await loadOrders(page);
+      setNotice({ type: 'success', title: 'Stock Received', message: 'Received stock quantity added successfully.' });
     } catch (err) {
-      alert('Error receiving: ' + err.message);
+      setNotice({ type: 'error', title: 'Receive Failed', message: err.response?.data?.message || err.message });
     } finally {
       setReceivingItems(false);
     }
@@ -110,6 +114,7 @@ export default function PurchaseOrders() {
   };
 
   return <Layout title="Purchase Orders" subtitle="Manage orders from manufacturers and track inventory receipts.">
+    <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <button onClick={() => setShowForm(true)} className="mb-6 rounded-xl bg-brand-red text-white px-6 py-3 font-bold flex items-center gap-2"><Plus size={20}/>New Order</button>
 
     {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">

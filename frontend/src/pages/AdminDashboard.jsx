@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Filter, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
+import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -24,6 +25,7 @@ export default function AdminDashboard() {
   const [loadingReturns, setLoadingReturns] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   async function load(pageNum = 1) {
     try {
@@ -76,8 +78,9 @@ export default function AdminDashboard() {
       setShowAddProduct(false);
       e.currentTarget.reset();
       await load(1);
+      setNotice({ type: 'success', title: 'Product Added', message: 'Product stock added successfully.' });
     } catch (err) {
-      alert('Failed to add product: ' + (err.response?.data?.message || err.message));
+      setNotice({ type: 'error', title: 'Add Product Failed', message: err.response?.data?.message || err.message });
     } finally {
       setAddingProduct(false);
     }
@@ -105,6 +108,9 @@ export default function AdminDashboard() {
       setSavingEdit(true);
       await api.put(`/products/${editing._id}`, body);
       setEditing(null); await load(page);
+      setNotice({ type: 'success', title: 'Product Updated', message: 'Product details updated successfully.' });
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Update Failed', message: err.response?.data?.message || err.message });
     } finally {
       setSavingEdit(false);
     }
@@ -113,6 +119,7 @@ export default function AdminDashboard() {
   const totalPages = Math.ceil(total / limit);
 
   return <Layout title="Admin Inventory" subtitle="Manage products, prices, quantity and product details.">
+    <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="mb-5 flex gap-3 border-b">
       <button onClick={() => setTab('inventory')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'inventory' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Inventory</button>
       <button onClick={() => setTab('returns')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'returns' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Returns</button>

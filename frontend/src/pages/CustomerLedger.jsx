@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BookOpen, Edit, Plus, RefreshCw, Search, Wallet } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -21,6 +22,7 @@ export default function CustomerLedger() {
   const [detail, setDetail] = useState(null);
   const [entryMode, setEntryMode] = useState(null);
   const [entryForm, setEntryForm] = useState({ amount: '', direction: 'increase', description: '' });
+  const [notice, setNotice] = useState(null);
 
   async function load() {
     try {
@@ -70,8 +72,9 @@ export default function CustomerLedger() {
       setFormOpen(false);
       await load();
       if (selected) await loadDetail(selected);
+      setNotice({ type: 'success', title: editing ? 'Customer Updated' : 'Customer Added', message: editing ? 'Customer details updated successfully.' : 'Customer added successfully.' });
     } catch (err) {
-      alert(err.response?.data?.message || err.message);
+      setNotice({ type: 'error', title: 'Customer Save Failed', message: err.response?.data?.message || err.message });
     } finally {
       setSaving(false);
     }
@@ -87,8 +90,9 @@ export default function CustomerLedger() {
       setEntryForm({ amount: '', direction: 'increase', description: '' });
       await load();
       await loadDetail(selected);
+      setNotice({ type: 'success', title: entryMode === 'payment' ? 'Payment Recorded' : 'Adjustment Saved', message: entryMode === 'payment' ? 'Customer payment recorded successfully.' : 'Customer balance adjustment saved successfully.' });
     } catch (err) {
-      alert(err.response?.data?.message || err.message);
+      setNotice({ type: 'error', title: 'Ledger Entry Failed', message: err.response?.data?.message || err.message });
     } finally {
       setSaving(false);
     }
@@ -97,6 +101,7 @@ export default function CustomerLedger() {
   const totalBalance = customers.reduce((sum, c) => sum + Number(c.currentBalance || 0), 0);
 
   return <Layout title="Khata / Customer Ledger" subtitle="Manage customer balances, payments, bills, and manual adjustments.">
+    <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid lg:grid-cols-[360px_1fr] gap-6">
       <aside className="rounded-3xl bg-white border shadow-soft overflow-hidden">
         <div className="p-5 border-b">

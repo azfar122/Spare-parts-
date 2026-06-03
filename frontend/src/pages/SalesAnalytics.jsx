@@ -132,6 +132,11 @@ export default function SalesAnalytics() {
               <div key={idx} className="bg-slate-50 p-3 rounded-lg">
                 <div className="flex justify-between"><span className="font-semibold">{item.partName}</span><span>{item.qty}x</span></div>
                 <div className="text-xs text-slate-500">{item.partCode} · {item.model}</div>
+                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">
+                  <span>Main used: <b>{Number(item.inventoryQtyUsed ?? item.qty)}</b></span>
+                  <span>Warehouse used: <b>{Number(item.warehouseQtyUsed || 0)}</b></span>
+                  <span>Warehouse: <b>{item.warehouseName || '-'}</b></span>
+                </div>
                 <div className="flex justify-between text-xs mt-2"><span>Rs {Number(item.price).toLocaleString()}</span><span className="font-semibold">Rs {Number(item.lineTotal).toLocaleString()}</span></div>
               </div>
             ))}
