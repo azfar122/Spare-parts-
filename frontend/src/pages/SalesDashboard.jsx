@@ -85,6 +85,16 @@ export default function SalesDashboard() {
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
   const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
 
+  function clearCurrentBill() {
+    setCart([]);
+    setSelectedCart({ row: -1, field: 'qty' });
+    setCustomerMode('walk-in');
+    setSelectedCustomer(null);
+    setCustomerSearch('');
+    setPaymentStatus('paid');
+    setPaidAmount('');
+  }
+
   function moveProductSelection(delta) {
     setSelectedProductIndex(current => {
       if (!products.length) return -1;
@@ -286,7 +296,10 @@ export default function SalesDashboard() {
         </div>}
       </div>
       <aside className="rounded-3xl bg-white p-5 shadow-soft border h-fit sticky top-5">
-        <h3 className="text-xl font-bold mb-4">Current Bill</h3>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="text-xl font-bold">Current Bill</h3>
+          {cart.length > 0 && <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>}
+        </div>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
           {cart.map((i,idx)=><div key={i.productId} className={`rounded-2xl p-3 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
             <div className="font-semibold">{i.partName}</div>
