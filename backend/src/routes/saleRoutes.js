@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
+import Return from '../models/Return.js';
 import Customer from '../models/Customer.js';
 import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -35,6 +36,40 @@ router.get('/', requireRole('admin'), async (req, res) => {
     Sale.countDocuments(filter)
   ]);
   res.json({ items: sales, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+});
+
+router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, res) => {
+  try {
+    const receiptNo = String(req.params.receiptNo || '').trim();
+    if (!receiptNo) return res.status(400).json({ message: 'Bill number is required' });
+
+    const sale = await Sale.findOne({ receiptNo })
+      .populate('customer', 'name phone currentBalance')
+      .populate('soldBy', 'name email');
+    if (!sale) return res.status(404).json({ message: 'Bill not found' });
+
+    const returns = await Return.aggregate([
+      { $match: { sale: sale._id } },
+      { $group: { _id: '$product', returnedQty: { $sum: '$qty' }, refunded: { $sum: '$amountRefunded' } } }
+    ]);
+    const returnedByProduct = new Map(returns.map(item => [String(item._id), item]));
+    const saleObject = sale.toObject();
+
+    saleObject.items = saleObject.items.map(item => {
+      const previousReturn = returnedByProduct.get(String(item.product));
+      const returnedQty = previousReturn?.returnedQty || 0;
+      return {
+        ...item,
+        returnedQty,
+        refunded: previousReturn?.refunded || 0,
+        returnableQty: Math.max(0, Number(item.qty || 0) - returnedQty)
+      };
+    });
+
+    res.json(saleObject);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 router.post('/', requireRole('sales', 'admin'), async (req, res) => {

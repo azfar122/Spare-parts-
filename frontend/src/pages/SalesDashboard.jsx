@@ -25,8 +25,14 @@ export default function SalesDashboard() {
   const [paymentStatus, setPaymentStatus] = useState('paid');
   const [paidAmount, setPaidAmount] = useState('');
   const [returnForm, setReturnForm] = useState(false);
-  const [returnSearch, setReturnSearch] = useState('');
-  const [returnSelectedProduct, setReturnSelectedProduct] = useState(null);
+  const [returnBillNo, setReturnBillNo] = useState('');
+  const [returnBill, setReturnBill] = useState(null);
+  const [returnSelectedProductId, setReturnSelectedProductId] = useState('');
+  const [returnQty, setReturnQty] = useState('');
+  const [returnAmountRefunded, setReturnAmountRefunded] = useState('');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnLookupLoading, setReturnLookupLoading] = useState(false);
+  const [returnError, setReturnError] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 50;
@@ -157,28 +163,78 @@ export default function SalesDashboard() {
       setCheckoutLoading(false);
     }
   }
+
+  function resetReturnState() {
+    setReturnForm(false);
+    setReturnBillNo('');
+    setReturnBill(null);
+    setReturnSelectedProductId('');
+    setReturnQty('');
+    setReturnAmountRefunded('');
+    setReturnReason('');
+    setReturnError('');
+  }
+
+  function selectReturnItem(item) {
+    setReturnSelectedProductId(item.product);
+    setReturnQty(item.returnableQty > 0 ? '1' : '');
+    setReturnAmountRefunded(item.returnableQty > 0 ? String(calculateReturnRefund(item, 1)) : '');
+  }
+
+  function calculateReturnRefund(item, qty) {
+    const returnQtyValue = Number(qty || 0);
+    const perUnitRefund = Number(item?.lineTotal || 0) / Number(item?.qty || 1);
+    return Math.round(perUnitRefund * returnQtyValue);
+  }
+
+  function updateReturnQty(value) {
+    setReturnQty(value);
+    const selectedItem = returnBill?.items?.find(item => item.product === returnSelectedProductId);
+    if (selectedItem) setReturnAmountRefunded(value ? String(calculateReturnRefund(selectedItem, value)) : '');
+  }
+
+  async function lookupReturnBill(e) {
+    e?.preventDefault();
+    if (!returnBillNo.trim()) return setReturnError('Enter a bill number');
+    try {
+      setReturnLookupLoading(true);
+      setReturnError('');
+      setReturnBill(null);
+      setReturnSelectedProductId('');
+      const r = await api.get(`/sales/by-receipt/${encodeURIComponent(returnBillNo.trim())}`);
+      setReturnBill(r.data);
+      const firstReturnableItem = r.data.items?.find(item => item.returnableQty > 0);
+      if (firstReturnableItem) selectReturnItem(firstReturnableItem);
+      else setReturnError('All items in this bill have already been returned');
+    } catch (err) {
+      setReturnError(err.response?.data?.message || err.message);
+    } finally {
+      setReturnLookupLoading(false);
+    }
+  }
   
   async function doReturn(e) {
     e.preventDefault();
-    if (!returnSelectedProduct && !returnSearch) return alert('Please select or enter a product');
+    if (!returnBill) return setReturnError('Search and select a bill first');
+    const selectedItem = returnBill.items?.find(item => item.product === returnSelectedProductId);
+    if (!selectedItem) return setReturnError('Select an item from the bill');
     const body = {
-      partCode: returnSelectedProduct?.partCode || '',
-      partName: returnSelectedProduct?.partName || returnSearch,
-      qty: Number(e.target.qty?.value || 0),
-      amountRefunded: Number(e.target.amountRefunded?.value || 0),
-      reason: e.target.reason?.value || ''
+      receiptNo: returnBill.receiptNo,
+      productId: selectedItem.product,
+      qty: Number(returnQty || 0),
+      amountRefunded: Number(returnAmountRefunded || 0),
+      reason: returnReason
     };
-    if (body.qty <= 0) return alert('Enter quantity');
+    if (body.qty <= 0) return setReturnError('Enter return quantity');
+    if (body.qty > selectedItem.returnableQty) return setReturnError(`Only ${selectedItem.returnableQty} item(s) can be returned`);
     try {
       setReturnSaving(true);
       await api.post('/returns', body);
-      setReturnForm(false);
-      setReturnSearch('');
-      setReturnSelectedProduct(null);
+      resetReturnState();
       await load(page);
       alert('Return saved and stock updated');
     } catch (err) {
-      alert('Error: ' + err.response?.data?.message || err.message);
+      setReturnError(err.response?.data?.message || err.message);
     } finally {
       setReturnSaving(false);
     }
@@ -303,43 +359,79 @@ export default function SalesDashboard() {
       <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
     </Modal>}
     
-    {returnForm && <Modal title="Process Return" onClose={()=>{setReturnForm(false); setReturnSearch(''); setReturnSelectedProduct(null);}}>
-      <form onSubmit={doReturn} className="grid gap-4">
-        <div className="relative">
-          <label className="text-sm font-medium">Search Product</label>
-          <div className="relative mt-1">
-            <input value={returnSearch} onChange={e=>setReturnSearch(e.target.value)} placeholder="Type part code or name..." className="w-full rounded-xl border p-3" />
-            {returnSearch && <button type="button" onClick={() => setReturnSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
-          </div>
-          {returnSearch && (
-            <div className="absolute top-14 left-0 right-0 bg-white border rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
-              <div className="p-2">
-                {products.filter(p=>p.partCode.includes(returnSearch.toUpperCase()) || p.partName.toLowerCase().includes(returnSearch.toLowerCase())).slice(0, 5).map(p=>(
-                  <div key={p._id} onClick={()=>{setReturnSelectedProduct(p); setReturnSearch('');}} className="p-2 hover:bg-slate-100 cursor-pointer text-sm border-b">
-                    <span className="font-medium">{p.partName}</span> <span className="text-xs text-slate-500">({p.partCode})</span>
-                  </div>
-                ))}
-                {products.filter(p=>p.partCode.includes(returnSearch.toUpperCase()) || p.partName.toLowerCase().includes(returnSearch.toLowerCase())).length === 0 && (
-                  <div className="p-2 text-sm text-slate-500">No products found</div>
-                )}
-              </div>
+    {returnForm && <Modal title="Process Return" onClose={resetReturnState}>
+      <div className="grid gap-4">
+        <form onSubmit={lookupReturnBill} className="grid gap-3">
+          <label className="text-sm font-medium">Bill Number</label>
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <input value={returnBillNo} onChange={e=>setReturnBillNo(e.target.value)} placeholder="Enter bill number..." className="w-full rounded-xl border p-3 pr-10" />
+              {returnBillNo && <button type="button" onClick={() => { setReturnBillNo(''); setReturnBill(null); setReturnSelectedProductId(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
             </div>
-          )}
-        </div>
-        {returnSelectedProduct && (
-          <div className="p-3 bg-slate-100 rounded-lg">
-            <p className="font-semibold">{returnSelectedProduct.partName}</p>
-            <p className="text-sm text-slate-600">{returnSelectedProduct.partCode}</p>
+            <button type="submit" disabled={returnLookupLoading} className="rounded-xl bg-brand-dark px-5 text-white font-semibold disabled:cursor-not-allowed disabled:opacity-70 flex items-center gap-2">
+              {returnLookupLoading && <ButtonSpinner />}
+              {returnLookupLoading ? 'Fetching...' : 'Fetch Bill'}
+            </button>
           </div>
+        </form>
+
+        {returnError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{returnError}</div>}
+
+        {returnBill && (
+          <form onSubmit={doReturn} className="grid gap-4">
+            <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-sm md:grid-cols-4">
+              <div><p className="text-slate-500">Bill</p><p className="font-bold">{returnBill.receiptNo}</p></div>
+              <div><p className="text-slate-500">Customer</p><p className="font-bold">{returnBill.customer?.name || returnBill.customerName || 'Walk-in Customer'}</p></div>
+              <div><p className="text-slate-500">Date</p><p className="font-bold">{new Date(returnBill.createdAt).toLocaleDateString()}</p></div>
+              <div><p className="text-slate-500">Total</p><p className="font-bold">Rs {Number(returnBill.grandTotal || 0).toLocaleString()}</p></div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left">
+                    <th className="p-3 font-semibold">Return</th>
+                    <th className="p-3 font-semibold">Item</th>
+                    <th className="p-3 text-right font-semibold">Sold</th>
+                    <th className="p-3 text-right font-semibold">Returned</th>
+                    <th className="p-3 text-right font-semibold">Available</th>
+                    <th className="p-3 text-right font-semibold">Price</th>
+                    <th className="p-3 text-right font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {returnBill.items?.map(item => (
+                    <tr key={item.product} className={`border-t ${returnSelectedProductId === item.product ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                      <td className="p-3">
+                        <input type="radio" name="returnItem" disabled={item.returnableQty <= 0} checked={returnSelectedProductId === item.product} onChange={() => selectReturnItem(item)} />
+                      </td>
+                      <td className="p-3">
+                        <p className="font-semibold">{item.partName}</p>
+                        <p className="text-xs text-slate-500">{item.partCode}</p>
+                      </td>
+                      <td className="p-3 text-right">{item.qty}</td>
+                      <td className="p-3 text-right">{item.returnedQty}</td>
+                      <td className="p-3 text-right font-semibold">{item.returnableQty}</td>
+                      <td className="p-3 text-right">Rs {Number(item.price || 0).toLocaleString()}</td>
+                      <td className="p-3 text-right font-semibold">Rs {Number(item.lineTotal || 0).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input value={returnQty} onChange={e=>updateReturnQty(e.target.value)} placeholder="Return quantity" type="number" min="1" max={returnBill.items?.find(item => item.product === returnSelectedProductId)?.returnableQty || 1} className="rounded-xl border p-3" required />
+              <input value={returnAmountRefunded} onChange={e=>setReturnAmountRefunded(e.target.value)} placeholder="Amount refunded" type="number" min="0" className="rounded-xl border p-3" />
+            </div>
+            <textarea value={returnReason} onChange={e=>setReturnReason(e.target.value)} placeholder="Reason" className="rounded-xl border p-3" />
+            <button type="submit" disabled={returnSaving || !returnSelectedProductId} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+              {returnSaving && <ButtonSpinner />}
+              {returnSaving ? 'Saving return...' : 'Save Return'}
+            </button>
+          </form>
         )}
-        <input name="qty" placeholder="Return quantity" type="number" min="1" className="rounded-xl border p-3" required />
-        <input name="amountRefunded" placeholder="Amount refunded" type="number" className="rounded-xl border p-3" />
-        <textarea name="reason" placeholder="Reason" className="rounded-xl border p-3" />
-        <button type="submit" disabled={returnSaving} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
-          {returnSaving && <ButtonSpinner />}
-          {returnSaving ? 'Saving return...' : 'Save Return'}
-        </button>
-      </form>
+      </div>
     </Modal>}
   </Layout>;
 }

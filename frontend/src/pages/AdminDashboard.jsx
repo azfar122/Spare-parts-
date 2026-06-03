@@ -162,6 +162,8 @@ export default function AdminDashboard() {
             <thead>
               <tr className="border-b bg-slate-50">
                 <th className="px-4 py-3 text-left font-semibold">Date</th>
+                <th className="px-4 py-3 text-left font-semibold">Bill</th>
+                <th className="px-4 py-3 text-left font-semibold">Customer</th>
                 <th className="px-4 py-3 text-left font-semibold">Part Name</th>
                 <th className="px-4 py-3 text-left font-semibold">Part Code</th>
                 <th className="px-4 py-3 text-right font-semibold">Qty Returned</th>
@@ -173,6 +175,8 @@ export default function AdminDashboard() {
               {returns.map((ret) => (
                 <tr key={ret._id} className="border-b hover:bg-slate-50">
                   <td className="px-4 py-3">{new Date(ret.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 font-semibold text-brand-red">{ret.receiptNo || ret.sale?.receiptNo || '-'}</td>
+                  <td className="px-4 py-3">{ret.customer?.name || ret.customerName || '-'}</td>
                   <td className="px-4 py-3 font-medium">{ret.partName}</td>
                   <td className="px-4 py-3 text-slate-600">{ret.partCode}</td>
                   <td className="px-4 py-3 text-right">{ret.qty}</td>
