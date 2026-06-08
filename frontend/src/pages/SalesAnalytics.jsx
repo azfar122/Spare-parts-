@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import ShopReceipt from '../components/ShopReceipt.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -147,6 +148,13 @@ export default function SalesAnalytics() {
           <div className="flex justify-between"><span>Discount</span><span>-Rs {Number(selectedSale.discountTotal).toLocaleString()}</span></div>
           <div className="flex justify-between text-lg font-bold text-brand-red"><span>Total</span><span>Rs {Number(selectedSale.grandTotal).toLocaleString()}</span></div>
         </div>
+        <button type="button" onClick={() => window.print()} className="no-print w-full rounded-xl bg-brand-dark text-white py-3 font-semibold inline-flex items-center justify-center gap-2">
+          <Printer size={18} />
+          Print Receipt
+        </button>
+      </div>
+      <div className="receipt-print-only" aria-hidden="true">
+        <ShopReceipt receipt={selectedSale} />
       </div>
     </Modal>}
   </Layout>;

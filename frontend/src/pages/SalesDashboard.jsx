@@ -29,9 +29,7 @@ export default function SalesDashboard() {
   const [returnForm, setReturnForm] = useState(false);
   const [returnBillNo, setReturnBillNo] = useState('');
   const [returnBill, setReturnBill] = useState(null);
-  const [returnSelectedProductId, setReturnSelectedProductId] = useState('');
-  const [returnQty, setReturnQty] = useState('');
-  const [returnAmountRefunded, setReturnAmountRefunded] = useState('');
+  const [returnItems, setReturnItems] = useState({});
   const [returnReason, setReturnReason] = useState('');
   const [returnLookupLoading, setReturnLookupLoading] = useState(false);
   const [returnError, setReturnError] = useState('');
@@ -114,6 +112,16 @@ export default function SalesDashboard() {
   function updateCartWarehouse(index, warehouseId) {
     setCart(c => c.map((x, idx) => idx === index ? { ...x, warehouseId } : x));
   }
+
+  function removeCartItem(index) {
+    setCart(c => c.filter((_, idx) => idx !== index));
+    setSelectedCart(current => {
+      if (current.row === index) return { row: -1, field: 'qty' };
+      if (current.row > index) return { ...current, row: current.row - 1 };
+      return current;
+    });
+  }
+
   const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
 
   function clearCurrentBill() {
@@ -211,17 +219,9 @@ export default function SalesDashboard() {
     setReturnForm(false);
     setReturnBillNo('');
     setReturnBill(null);
-    setReturnSelectedProductId('');
-    setReturnQty('');
-    setReturnAmountRefunded('');
+    setReturnItems({});
     setReturnReason('');
     setReturnError('');
-  }
-
-  function selectReturnItem(item) {
-    setReturnSelectedProductId(item.product);
-    setReturnQty(item.returnableQty > 0 ? '1' : '');
-    setReturnAmountRefunded(item.returnableQty > 0 ? String(calculateReturnRefund(item, 1)) : '');
   }
 
   function calculateReturnRefund(item, qty) {
@@ -230,10 +230,34 @@ export default function SalesDashboard() {
     return Math.round(perUnitRefund * returnQtyValue);
   }
 
-  function updateReturnQty(value) {
-    setReturnQty(value);
-    const selectedItem = returnBill?.items?.find(item => item.product === returnSelectedProductId);
-    if (selectedItem) setReturnAmountRefunded(value ? String(calculateReturnRefund(selectedItem, value)) : '');
+  function toggleReturnItem(item) {
+    if (item.returnableQty <= 0) return;
+    setReturnItems(current => {
+      if (current[item.product]) {
+        const next = { ...current };
+        delete next[item.product];
+        return next;
+      }
+      return {
+        ...current,
+        [item.product]: {
+          productId: item.product,
+          qty: '1',
+          amountRefunded: String(calculateReturnRefund(item, 1))
+        }
+      };
+    });
+  }
+
+  function updateReturnItem(productId, key, value) {
+    setReturnItems(current => {
+      const nextItem = { ...current[productId], [key]: value };
+      if (key === 'qty') {
+        const billItem = returnBill?.items?.find(item => item.product === productId);
+        if (billItem) nextItem.amountRefunded = value ? String(calculateReturnRefund(billItem, value)) : '';
+      }
+      return { ...current, [productId]: nextItem };
+    });
   }
 
   async function lookupReturnBill(e) {
@@ -243,12 +267,10 @@ export default function SalesDashboard() {
       setReturnLookupLoading(true);
       setReturnError('');
       setReturnBill(null);
-      setReturnSelectedProductId('');
+      setReturnItems({});
       const r = await api.get(`/sales/by-receipt/${encodeURIComponent(returnBillNo.trim())}`);
       setReturnBill(r.data);
-      const firstReturnableItem = r.data.items?.find(item => item.returnableQty > 0);
-      if (firstReturnableItem) selectReturnItem(firstReturnableItem);
-      else setReturnError('All items in this bill have already been returned');
+      if (!r.data.items?.some(item => item.returnableQty > 0)) setReturnError('All items in this bill have already been returned');
     } catch (err) {
       setReturnError(err.response?.data?.message || err.message);
     } finally {
@@ -259,17 +281,25 @@ export default function SalesDashboard() {
   async function doReturn(e) {
     e.preventDefault();
     if (!returnBill) return setReturnError('Search and select a bill first');
-    const selectedItem = returnBill.items?.find(item => item.product === returnSelectedProductId);
-    if (!selectedItem) return setReturnError('Select an item from the bill');
+    const selectedReturns = Object.values(returnItems);
+    if (!selectedReturns.length) return setReturnError('Select at least one item from the bill');
+    const items = selectedReturns.map(item => {
+      const billItem = returnBill.items?.find(row => row.product === item.productId);
+      return {
+        productId: item.productId,
+        qty: Number(item.qty || 0),
+        amountRefunded: Number(item.amountRefunded || 0),
+        returnableQty: Number(billItem?.returnableQty || 0),
+        partName: billItem?.partName || 'item'
+      };
+    });
     const body = {
       receiptNo: returnBill.receiptNo,
-      productId: selectedItem.product,
-      qty: Number(returnQty || 0),
-      amountRefunded: Number(returnAmountRefunded || 0),
+      items: items.map(({ productId, qty, amountRefunded }) => ({ productId, qty, amountRefunded })),
       reason: returnReason
     };
-    if (body.qty <= 0) return setReturnError('Enter return quantity');
-    if (body.qty > selectedItem.returnableQty) return setReturnError(`Only ${selectedItem.returnableQty} item(s) can be returned`);
+    const invalidItem = items.find(item => item.qty <= 0 || item.qty > item.returnableQty);
+    if (invalidItem) return setReturnError(`Enter a valid return quantity for ${invalidItem.partName}`);
     try {
       setReturnSaving(true);
       await api.post('/returns', body);
@@ -338,8 +368,17 @@ export default function SalesDashboard() {
           {cart.map((i,idx)=>{
             const shortageQty = Math.max(0, Number(i.qty || 0) - Number(i.stock || 0));
             const availableWarehouseOptions = warehouseOptions[i.productId] || [];
-            return <div key={i.productId} className={`rounded-2xl p-3 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
-            <div className="font-semibold">{i.partName}</div>
+            return <div key={i.productId} className={`relative rounded-2xl p-3 pr-11 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
+            <button
+              type="button"
+              onClick={() => removeCartItem(idx)}
+              className="absolute right-3 top-3 rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-brand-red"
+              title={`Remove ${i.partName} from bill`}
+              aria-label={`Remove ${i.partName} from bill`}
+            >
+              <X size={16} />
+            </button>
+            <div className="font-semibold break-words">{i.partName}</div>
             <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · Warehouse {i.warehouseQuantity || 0}</div>
             <div className="grid grid-cols-3 gap-2 mt-3">
               <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={Number(i.stock || 0) + Number(i.warehouseQuantity || 0)} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>updateCartQty(idx,e.target.value,i)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
@@ -427,7 +466,7 @@ export default function SalesDashboard() {
           <div className="flex gap-3">
             <div className="relative flex-1">
               <input value={returnBillNo} onChange={e=>setReturnBillNo(e.target.value)} placeholder="Enter bill number..." className="w-full rounded-xl border p-3 pr-10" />
-              {returnBillNo && <button type="button" onClick={() => { setReturnBillNo(''); setReturnBill(null); setReturnSelectedProductId(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
+              {returnBillNo && <button type="button" onClick={() => { setReturnBillNo(''); setReturnBill(null); setReturnItems({}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
             </div>
             <button type="submit" disabled={returnLookupLoading} className="rounded-xl bg-brand-dark px-5 text-white font-semibold disabled:cursor-not-allowed disabled:opacity-70 flex items-center gap-2">
               {returnLookupLoading && <ButtonSpinner />}
@@ -442,7 +481,11 @@ export default function SalesDashboard() {
           <form onSubmit={doReturn} className="grid gap-4">
             <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-sm md:grid-cols-4">
               <div><p className="text-slate-500">Bill</p><p className="font-bold">{returnBill.receiptNo}</p></div>
-              <div><p className="text-slate-500">Customer</p><p className="font-bold">{returnBill.customer?.name || returnBill.customerName || 'Walk-in Customer'}</p></div>
+              <div>
+                <p className="text-slate-500">Customer</p>
+                <p className="font-bold">{returnBill.customer?.name || returnBill.customerName || 'Walk-in Customer'}</p>
+                {returnBill.customer?.phone && <p className="text-xs text-slate-500">{returnBill.customer.phone}</p>}
+              </div>
               <div><p className="text-slate-500">Date</p><p className="font-bold">{new Date(returnBill.createdAt).toLocaleDateString()}</p></div>
               <div><p className="text-slate-500">Total</p><p className="font-bold">Rs {Number(returnBill.grandTotal || 0).toLocaleString()}</p></div>
             </div>
@@ -456,15 +499,19 @@ export default function SalesDashboard() {
                     <th className="p-3 text-right font-semibold">Sold</th>
                     <th className="p-3 text-right font-semibold">Returned</th>
                     <th className="p-3 text-right font-semibold">Available</th>
+                    <th className="p-3 text-right font-semibold">Return Qty</th>
+                    <th className="p-3 text-right font-semibold">Refund</th>
                     <th className="p-3 text-right font-semibold">Price</th>
                     <th className="p-3 text-right font-semibold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {returnBill.items?.map(item => (
-                    <tr key={item.product} className={`border-t ${returnSelectedProductId === item.product ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                  {returnBill.items?.map(item => {
+                    const selectedReturnItem = returnItems[item.product];
+                    return (
+                    <tr key={item.product} className={`border-t ${selectedReturnItem ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
                       <td className="p-3">
-                        <input type="radio" name="returnItem" disabled={item.returnableQty <= 0} checked={returnSelectedProductId === item.product} onChange={() => selectReturnItem(item)} />
+                        <input type="checkbox" disabled={item.returnableQty <= 0} checked={Boolean(selectedReturnItem)} onChange={() => toggleReturnItem(item)} />
                       </td>
                       <td className="p-3">
                         <p className="font-semibold">{item.partName}</p>
@@ -473,20 +520,22 @@ export default function SalesDashboard() {
                       <td className="p-3 text-right">{item.qty}</td>
                       <td className="p-3 text-right">{item.returnedQty}</td>
                       <td className="p-3 text-right font-semibold">{item.returnableQty}</td>
+                      <td className="p-3 text-right">
+                        {selectedReturnItem ? <input value={selectedReturnItem.qty} onChange={e=>updateReturnItem(item.product, 'qty', e.target.value)} type="number" min="1" max={item.returnableQty} className="w-20 rounded-lg border p-2 text-right" required /> : '-'}
+                      </td>
+                      <td className="p-3 text-right">
+                        {selectedReturnItem ? <input value={selectedReturnItem.amountRefunded} onChange={e=>updateReturnItem(item.product, 'amountRefunded', e.target.value)} type="number" min="0" className="w-24 rounded-lg border p-2 text-right" /> : '-'}
+                      </td>
                       <td className="p-3 text-right">Rs {Number(item.price || 0).toLocaleString()}</td>
                       <td className="p-3 text-right font-semibold">Rs {Number(item.lineTotal || 0).toLocaleString()}</td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <input value={returnQty} onChange={e=>updateReturnQty(e.target.value)} placeholder="Return quantity" type="number" min="1" max={returnBill.items?.find(item => item.product === returnSelectedProductId)?.returnableQty || 1} className="rounded-xl border p-3" required />
-              <input value={returnAmountRefunded} onChange={e=>setReturnAmountRefunded(e.target.value)} placeholder="Amount refunded" type="number" min="0" className="rounded-xl border p-3" />
-            </div>
             <textarea value={returnReason} onChange={e=>setReturnReason(e.target.value)} placeholder="Reason" className="rounded-xl border p-3" />
-            <button type="submit" disabled={returnSaving || !returnSelectedProductId} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+            <button type="submit" disabled={returnSaving || Object.keys(returnItems).length === 0} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
               {returnSaving && <ButtonSpinner />}
               {returnSaving ? 'Saving return...' : 'Save Return'}
             </button>

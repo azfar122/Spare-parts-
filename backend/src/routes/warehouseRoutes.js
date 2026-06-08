@@ -37,7 +37,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
 
 router.get('/stock', requireRole('admin'), async (req, res) => {
   const { warehouseId, q = '', page = 1, limit = 50 } = req.query;
-  const productFilter = { active: true };
+  const productFilter = { active: { $ne: false } };
   if (q) productFilter.$or = [
     { partName: new RegExp(q, 'i') },
     { partCode: new RegExp(q, 'i') },

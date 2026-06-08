@@ -209,7 +209,7 @@ export default function AdminDashboard() {
     {showAddProduct && <Modal title="Add New Product" onClose={()=>setShowAddProduct(false)}><form onSubmit={handleAddProduct} className="grid gap-4">
       <div className="grid grid-cols-2 gap-4">
         <label className="text-sm font-medium col-span-2">Part Name <span className="text-red-500">*</span><input name="partName" placeholder="e.g., Engine Oil" className="mt-1 w-full rounded-xl border p-3" required /></label>
-        <label className="text-sm font-medium">Part Code <span className="text-slate-400">(optional)</span><input name="partCode" placeholder="e.g., OIL-001" className="mt-1 w-full rounded-xl border p-3" /></label>
+        <label className="text-sm font-medium">Part Code <span className="text-red-500">*</span><input name="partCode" placeholder="e.g., OIL-001" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">Model <span className="text-red-500">*</span><input name="model" placeholder="e.g., XYZ-100" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">MRP <span className="text-red-500">*</span><input name="mrp" type="number" placeholder="e.g., 500" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Quantity <span className="text-red-500">*</span><input name="quantity" type="number" placeholder="e.g., 100" className="mt-1 w-full rounded-xl border p-3" min="1" required /></label>

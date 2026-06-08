@@ -9,6 +9,11 @@ import { api } from '../api/client.js';
 const emptyForm = { name: '', phone: '', address: '', notes: '', openingBalance: '' };
 const money = value => `Rs ${Number(value || 0).toLocaleString()}`;
 const entryBalance = entry => Number(entry.debit || 0) - Number(entry.credit || 0);
+const entryTypeLabel = entry => {
+  if (entry.type === 'sale' && entry.sale?.paymentStatus === 'partial') return 'Partial';
+  if (entry.type === 'sale' && entry.sale?.paymentStatus === 'unpaid') return 'Not Received';
+  return entry.type;
+};
 
 export default function CustomerLedger() {
   const [customers, setCustomers] = useState([]);
@@ -172,8 +177,8 @@ export default function CustomerLedger() {
                   const rowBalance = entryBalance(entry);
                   return <tr key={entry._id} className="border-t">
                     <td className="p-4">{new Date(entry.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-                    <td className="p-4 capitalize">{entry.type}</td>
-                    <td className="p-4">{entry.description}{entry.sale?.receiptNo ? <span className="text-slate-500"> · {entry.sale.receiptNo}</span> : ''}</td>
+                    <td className="p-4 capitalize">{entryTypeLabel(entry)}</td>
+                    <td className="p-4">{entry.description}</td>
                     <td className="p-4 text-right">{entry.debit ? money(entry.debit) : '-'}</td>
                     <td className="p-4 text-right">{entry.credit ? money(entry.credit) : '-'}</td>
                     <td className={`p-4 text-right font-bold ${rowBalance < 0 ? 'text-emerald-700' : ''}`}>{rowBalance < 0 ? `-${money(Math.abs(rowBalance))}` : money(rowBalance)}</td>

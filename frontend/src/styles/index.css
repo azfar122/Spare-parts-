@@ -169,6 +169,16 @@ body { background: #f5f7fb; color: #0f172a; }
   font-weight: 900;
 }
 
+.receipt-print-only {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 80mm;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 @media print {
   @page { size: 80mm auto; margin: 3mm; }
 
@@ -213,6 +223,14 @@ body { background: #f5f7fb; color: #0f172a; }
     box-shadow: none !important;
     break-after: avoid;
     page-break-after: avoid;
+  }
+  .receipt-print-only {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
   }
   .no-print { display: none !important; }
 }
