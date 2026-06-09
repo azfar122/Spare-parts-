@@ -17,7 +17,9 @@ export async function requireAuth(req, res, next) {
 
 export function requireRole(...roles) {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) return res.status(403).json({ message: 'Forbidden' });
+    const userRole = String(req.user.role || '').trim().toLowerCase();
+    const allowedRoles = roles.map(role => String(role).trim().toLowerCase());
+    if (!allowedRoles.includes(userRole)) return res.status(403).json({ message: 'Forbidden' });
     next();
   };
 }

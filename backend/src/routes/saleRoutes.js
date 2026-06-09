@@ -2,7 +2,12 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
+import Return from '../models/Return.js';
+import WarehouseStock from '../models/WarehouseStock.js';
+import Customer from '../models/Customer.js';
+import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { productLabel, productPrice, productStock, productStockSet, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -10,6 +15,7 @@ router.use(requireAuth);
 router.get('/', requireRole('admin'), async (req, res) => {
   const { startDate, endDate, productCode, productName, page = 1, limit = 50 } = req.query;
   const filter = {};
+  const productSearchActive = Boolean(productCode || productName);
   
   if (startDate || endDate) {
     filter.createdAt = {};
@@ -29,42 +35,204 @@ router.get('/', requireRole('admin'), async (req, res) => {
 
   const skip = (Number(page) - 1) * Number(limit);
   const [sales, total] = await Promise.all([
-    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email'),
+    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email').populate('customer', 'name phone currentBalance'),
     Sale.countDocuments(filter)
   ]);
-  res.json({ items: sales, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+
+  const codePattern = productCode ? new RegExp(productCode, 'i') : null;
+  const namePattern = productName ? new RegExp(productName, 'i') : null;
+  const summarizeMatchedItems = saleItems => {
+    const matchedItems = saleItems.filter(item => {
+      const codeMatches = codePattern && codePattern.test(item.partCode || '');
+      const nameMatches = namePattern && namePattern.test(item.partName || '');
+      return codeMatches || nameMatches;
+    });
+
+    return {
+      matchedItems,
+      matchedQty: matchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+      matchedAmount: matchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0)
+    };
+  };
+
+  const items = productSearchActive
+    ? sales.map(sale => {
+      const saleObject = sale.toObject();
+      const matched = summarizeMatchedItems(saleObject.items);
+      return {
+        ...saleObject,
+        ...matched
+      };
+    })
+    : sales;
+
+  let matchedSummary = null;
+  if (productSearchActive) {
+    const allMatchingSales = await Sale.find(filter).select('items').lean();
+    const allMatchedItems = allMatchingSales.flatMap(sale => summarizeMatchedItems(sale.items || []).matchedItems);
+    const productNames = [...new Set(allMatchedItems.map(item => item.partName).filter(Boolean))];
+    matchedSummary = {
+      productNames,
+      qty: allMatchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+      amount: allMatchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0),
+      bills: allMatchingSales.length
+    };
+  }
+
+  res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)), matchedSummary });
+});
+
+router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, res) => {
+  try {
+    const receiptNo = String(req.params.receiptNo || '').trim();
+    if (!receiptNo) return res.status(400).json({ message: 'Bill number is required' });
+
+    const sale = await Sale.findOne({ receiptNo })
+      .populate('customer', 'name phone currentBalance')
+      .populate('soldBy', 'name email');
+    if (!sale) return res.status(404).json({ message: 'Bill not found' });
+
+    const returns = await Return.aggregate([
+      { $match: { sale: sale._id } },
+      { $group: { _id: '$product', returnedQty: { $sum: '$qty' }, refunded: { $sum: '$amountRefunded' } } }
+    ]);
+    const returnedByProduct = new Map(returns.map(item => [String(item._id), item]));
+    const saleObject = sale.toObject();
+
+    saleObject.items = saleObject.items.map(item => {
+      const previousReturn = returnedByProduct.get(String(item.product));
+      const returnedQty = previousReturn?.returnedQty || 0;
+      return {
+        ...item,
+        returnedQty,
+        refunded: previousReturn?.refunded || 0,
+        returnableQty: Math.max(0, Number(item.qty || 0) - returnedQty)
+      };
+    });
+
+    res.json(saleObject);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 router.post('/', requireRole('sales', 'admin'), async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { items, customerName } = req.body;
-    if (!items?.length) return res.status(400).json({ message: 'No items selected' });
+    const { items, customerName, customerId, paymentStatus = 'paid' } = req.body;
+    if (!items?.length) throw new Error('No items selected');
+    if (!['paid', 'unpaid', 'partial'].includes(paymentStatus)) throw new Error('Invalid payment status');
 
     const saleItems = [];
     let subtotal = 0;
     let discountTotal = 0;
+    let customer = null;
+
+    if (customerId) {
+      customer = await Customer.findById(customerId).session(session);
+      if (!customer) throw new Error('Customer not found');
+    }
 
     for (const item of items) {
-      const product = await Product.findById(item.productId).session(session);
+      const product = await Product.findById(item.productId).session(session).lean();
       if (!product) throw new Error('Product not found');
+      const productData = serializeProduct(product);
       const qty = Number(item.qty);
       const discount = Number(item.discount || 0);
       if (qty <= 0) throw new Error('Invalid quantity');
-      if (product.quantity < qty) throw new Error(`Not enough stock for ${product.partCode}`);
-      const price = Number(item.price ?? product.mrp);
+
+      const currentStock = productStock(product);
+      const inventoryQtyUsed = Math.min(currentStock, qty);
+      const warehouseQtyNeeded = qty - inventoryQtyUsed;
+      let warehouseStock = null;
+      let warehouseQtyUsed = 0;
+      let warehouseName = '';
+
+      if (warehouseQtyNeeded > 0) {
+        if (!item.warehouseId) throw new Error(`Select a warehouse for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
+        warehouseStock = await WarehouseStock.findOne({ warehouse: item.warehouseId, product: product._id })
+          .populate('warehouse', 'name')
+          .session(session);
+        if (!warehouseStock || Number(warehouseStock.quantity || 0) < warehouseQtyNeeded) {
+          throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
+        }
+        warehouseQtyUsed = warehouseQtyNeeded;
+        warehouseName = warehouseStock.warehouse?.name || '';
+      }
+
+      const price = Number(item.price ?? productPrice(product));
       const gross = price * qty;
       const lineTotal = Math.max(0, gross - discount);
       subtotal += gross;
       discountTotal += discount;
-      product.quantity -= qty;
-      await product.save({ session });
-      saleItems.push({ product: product._id, partName: product.partName, partCode: product.partCode, model: product.model, qty, price, discount, lineTotal });
+      if (inventoryQtyUsed > 0) {
+        await Product.collection.updateOne(
+          { _id: product._id },
+          { $set: productStockSet(currentStock - inventoryQtyUsed) },
+          { session }
+        );
+      }
+
+      if (warehouseStock && warehouseQtyUsed > 0) {
+        warehouseStock.quantity -= warehouseQtyUsed;
+        await warehouseStock.save({ session });
+      }
+
+      saleItems.push({
+        product: product._id,
+        partName: productData.partName,
+        partCode: productData.partCode,
+        model: productData.type || productData.model,
+        qty,
+        price,
+        discount,
+        inventoryQtyUsed,
+        warehouseQtyUsed,
+        warehouse: warehouseStock?.warehouse?._id,
+        warehouseName,
+        lineTotal
+      });
     }
 
+    const grandTotal = subtotal - discountTotal;
+    const requestedPaidAmount = Number(req.body.paidAmount || 0);
+    let paidAmount = paymentStatus === 'paid' ? grandTotal : 0;
+    if (paymentStatus === 'partial') {
+      if (requestedPaidAmount <= 0 || requestedPaidAmount >= grandTotal) throw new Error('Partial payment must be greater than zero and less than the total');
+      paidAmount = requestedPaidAmount;
+    }
+    const dueAmount = Math.max(0, grandTotal - paidAmount);
+    if (dueAmount > 0 && !customer) throw new Error('Select an existing customer before adding unpaid balance');
+
     const receiptNo = `R-${Date.now()}`;
-    const [sale] = await Sale.create([{ receiptNo, items: saleItems, subtotal, discountTotal, grandTotal: subtotal - discountTotal, customerName, soldBy: req.user._id }], { session });
+    const [sale] = await Sale.create([{
+      receiptNo,
+      items: saleItems,
+      subtotal,
+      discountTotal,
+      grandTotal,
+      customer: customer?._id,
+      customerName: customer?.name || customerName || 'Walk-in Customer',
+      paymentStatus,
+      paidAmount,
+      dueAmount,
+      soldBy: req.user._id
+    }], { session });
+
+    if (customer) {
+      await addLedgerEntry({
+        customer,
+        type: 'sale',
+        sale: sale._id,
+        description: `Sale bill ${receiptNo}`,
+        debit: grandTotal,
+        credit: paidAmount,
+        userId: req.user._id,
+        session
+      });
+    }
+
     await session.commitTransaction();
     req.app.get('io').emit('inventory:bulk-update');
     res.status(201).json(sale);

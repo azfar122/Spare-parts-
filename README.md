@@ -75,8 +75,8 @@ npm run seed -C backend
 ```
 
 Default Test Users:
-- **Admin**: admin@spares.local / Admin@12345
-- **Sales**: sales@spares.local / Sales@12345
+- **Admin**: admin or admin@spares.local / Admin@12345
+- **Sales**: sales or sales@spares.local / Sales@12345
 
 #### 3. Import Products from CSV
 ```bash

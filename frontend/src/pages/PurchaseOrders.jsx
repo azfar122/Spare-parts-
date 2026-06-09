@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
@@ -17,12 +18,13 @@ export default function PurchaseOrders() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [receivingItems, setReceivingItems] = useState(false);
+  const [notice, setNotice] = useState(null);
   const limit = 50;
 
   const [formData, setFormData] = useState({
     orderNumber: '',
     totalPrice: '',
-    items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }],
+    items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }],
     notes: ''
   });
   const [searchQueries, setSearchQueries] = useState({});
@@ -64,16 +66,20 @@ export default function PurchaseOrders() {
         items: formData.items.map(item => ({
           product: item.productId || undefined,
           partCode: item.partCode,
-          partName: item.partName,          model: item.model || 'COMMON',          qty: Number(item.qty),
+          partName: item.partName,
+          brand: item.brand || '',
+          model: item.model || 'COMMON',
+          qty: Number(item.qty),
           price: item.price ? Number(item.price) : undefined
         })),
         notes: formData.notes
       });
-      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }], notes: '' });
+      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }], notes: '' });
       setShowForm(false);
       await loadOrders(1);
+      setNotice({ type: 'success', title: 'Order Created', message: 'Purchase order created successfully.' });
     } catch (err) {
-      alert('Error creating order: ' + err.message);
+      setNotice({ type: 'error', title: 'Create Order Failed', message: err.response?.data?.message || err.message });
     } finally {
       setCreatingOrder(false);
     }
@@ -95,8 +101,9 @@ export default function PurchaseOrders() {
       setSelectedOrder(updated.data);
       setReceiveForm(null);
       await loadOrders(page);
+      setNotice({ type: 'success', title: 'Stock Received', message: 'Received stock quantity added successfully.' });
     } catch (err) {
-      alert('Error receiving: ' + err.message);
+      setNotice({ type: 'error', title: 'Receive Failed', message: err.response?.data?.message || err.message });
     } finally {
       setReceivingItems(false);
     }
@@ -110,6 +117,7 @@ export default function PurchaseOrders() {
   };
 
   return <Layout title="Purchase Orders" subtitle="Manage orders from manufacturers and track inventory receipts.">
+    <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <button onClick={() => setShowForm(true)} className="mb-6 rounded-xl bg-brand-red text-white px-6 py-3 font-bold flex items-center gap-2"><Plus size={20}/>New Order</button>
 
     {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">
@@ -184,7 +192,7 @@ export default function PurchaseOrders() {
                             key={p._id}
                             onClick={() => {
                               const newItems = [...formData.items];
-                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode, partName: p.partName, model: p.model, price: p.mrp };
+                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode, partName: p.partName, brand: p.brand || '', model: p.model || 'COMMON', price: p.mrp };
                               setFormData({...formData, items: newItems});
                               setSearchQueries({...searchQueries, [idx]: ''});
                             }}
@@ -211,8 +219,8 @@ export default function PurchaseOrders() {
                   <input value={item.partName} onChange={e => { const newItems = [...formData.items]; newItems[idx].partName = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Part name" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-700">Model</label>
-                  <input value={item.model} onChange={e => { const newItems = [...formData.items]; newItems[idx].model = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Hero, TVS" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                  <label className="text-xs font-medium text-slate-700">Brand</label>
+                  <input value={item.brand || item.model || ''} onChange={e => { const newItems = [...formData.items]; newItems[idx].brand = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="AHL" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Qty</label>
@@ -228,7 +236,7 @@ export default function PurchaseOrders() {
               </div>
             </div>;
           })}
-          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', model: '', qty: 1, productId: null, price: ''}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
+          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', brand: '', qty: 1, productId: null, price: ''}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
         </div>
 
         <div><label className="text-sm font-medium">Notes</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Order notes" className="mt-1 w-full rounded-xl border p-3" /></div>
@@ -253,7 +261,7 @@ export default function PurchaseOrders() {
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <p className="font-semibold">{item.partName}</p>
-                  <p className="text-xs text-slate-500">{item.partCode} • {item.model}</p>
+                  <p className="text-xs text-slate-500">{item.partCode} • {item.brand || item.model || '-'}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.status === 'received' ? 'bg-green-100 text-green-700' : item.status === 'partial' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
               </div>

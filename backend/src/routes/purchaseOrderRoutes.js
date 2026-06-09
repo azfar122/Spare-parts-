@@ -3,10 +3,24 @@ import mongoose from 'mongoose';
 import PurchaseOrder from '../models/PurchaseOrder.js';
 import Product from '../models/Product.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { productStockSet, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
 router.use(requireRole('admin'));
+
+async function addProductStock(productId, received, options = {}) {
+  let query = Product.findById(productId).lean();
+  if (options.session) query = query.session(options.session);
+  const product = await query;
+  if (!product) throw new Error('Product not found');
+  const current = Number(serializeProduct(product).quantity || 0);
+  await Product.collection.updateOne(
+    { _id: product._id },
+    { $set: productStockSet(current + Number(received || 0)) },
+    options.session ? { session: options.session } : undefined
+  );
+}
 
 router.get('/', async (req, res) => {
   const { status, page = 1, limit = 50 } = req.query;
@@ -62,22 +76,40 @@ router.put('/:id/receive', async (req, res) => {
       item.status = 'received';
       // Update product inventory
       if (item.product) {
-        await Product.findByIdAndUpdate(item.product, { $inc: { quantity: item.received } });
+        await addProductStock(item.product, item.received);
       } else if (item.partCode) {
         // Create new product if it doesn't exist
-        const existingProduct = await Product.findOne({ partCode: item.partCode });
+        const existingProduct = await Product.findOne({
+          $or: [{ partCode: item.partCode }, { PartNo: item.partCode }, { 'Part No': item.partCode }]
+        });
         if (!existingProduct) {
           const newProduct = await Product.create({
             partName: item.partName || `New Part - ${item.partCode}`,
             partCode: item.partCode,
             model: item.model || 'COMMON',
+            brand: item.brand || '',
+            type: item.model || 'COMMON',
             quantity: item.received,
             mrp: item.price || 0,
             bookingPrice: item.price || 0
           });
+          await Product.collection.updateOne(
+            { _id: newProduct._id },
+            { $set: {
+              'Product Name': item.partName || `New Part - ${item.partCode}`,
+              PartNo: item.partCode,
+              'Part No': item.partCode,
+              Brand: item.brand || '',
+              Type: item.model || 'COMMON',
+              'Stock Qty': item.received,
+              CCP: item.price || 0,
+              CP: item.price || 0,
+              RP: item.price || 0
+            } }
+          );
           item.product = newProduct._id;
         } else {
-          await Product.findByIdAndUpdate(existingProduct._id, { $inc: { quantity: item.received } });
+          await addProductStock(existingProduct._id, item.received);
           item.product = existingProduct._id;
         }
       }
@@ -85,7 +117,7 @@ router.put('/:id/receive', async (req, res) => {
       item.status = 'partial';
       // Partial update to inventory
       if (item.product) {
-        await Product.findByIdAndUpdate(item.product, { $inc: { quantity: item.received } });
+        await addProductStock(item.product, item.received);
       }
     }
     

@@ -6,7 +6,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node src/utils/seedUsers.js",
-    "import:csv": "node src/utils/importProductsCsv.js"
+    "import:csv": "node src/utils/importProductsCsv.js",
+    "sync:warehouse-stocks": "node src/utils/syncWarehouseStocks.js"
   },
   "dependencies": {
     "bcryptjs": "latest",

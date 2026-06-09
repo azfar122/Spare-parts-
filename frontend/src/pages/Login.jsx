@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bike, Lock, Eye, EyeOff } from 'lucide-react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ButtonSpinner } from '../components/Loader.jsx';
+import logo from '../assets/atlas-honda-logo.png';
 
 export default function Login() {
   const { login } = useAuth();
@@ -17,14 +18,14 @@ export default function Login() {
     e.preventDefault(); setError('');
     setSubmitting(true);
     try { const user = await login(username, password); navigate(user.role === 'admin' ? '/admin' : '/sales'); }
-    catch (err) { setError(err.response?.data?.message || 'Invalid username or password'); }
+    catch (err) { setError(err.response?.data?.message || 'Could not reach the API. Check that the backend is running on port 5001.'); }
     finally { setSubmitting(false); }
   }
 
   return <div className="min-h-screen grid lg:grid-cols-2 bg-white">
     <div className="hidden lg:flex bg-brand-dark text-white p-12 flex-col justify-between relative overflow-hidden">
       <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-red/30" />
-      <div className="flex items-center gap-3"><div className="h-12 w-12 rounded-2xl bg-brand-red grid place-items-center"><Bike /></div><span className="font-bold text-2xl">PartsPro</span></div>
+      <div className="flex items-center gap-3"><img src={logo} alt="Asif Auto Traders" className="h-14 w-20 rounded-xl bg-white object-contain p-1.5" /><span className="font-bold text-2xl">Asif Auto Traders</span></div>
       <div><h1 className="text-5xl font-black leading-tight">Modern spare parts inventory and billing.</h1><p className="mt-5 text-slate-300 text-lg">Inspired by clean motorcycle dealer workflows: fast search, live stock, receipts and returns.</p></div>
       <p className="text-slate-400">Admin + Sales Team role-based access</p>
     </div>

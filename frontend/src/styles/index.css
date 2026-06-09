@@ -3,9 +3,234 @@
 @tailwind utilities;
 
 body { background: #f5f7fb; color: #0f172a; }
+
+.shop-receipt {
+  width: 80mm;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.receipt-topline {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.receipt-page { text-align: right; }
+.receipt-header { text-align: center; }
+.receipt-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: underline;
+}
+
+.receipt-header p {
+  margin: 3px 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.receipt-phones {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 8px 10px;
+  font-weight: 700;
+}
+
+.receipt-title {
+  border-bottom: 1px solid #111827;
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.receipt-meta {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.receipt-meta b {
+  font-size: 13px;
+  text-align: center;
+}
+
+.receipt-meta span:last-child { text-align: right; }
+
+.receipt-account {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.receipt-account b {
+  display: block;
+  text-transform: uppercase;
+}
+
+.receipt-account p {
+  margin: 2px 0 0;
+  text-align: right;
+}
+
+.receipt-items {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.receipt-items th {
+  border-bottom: 1px solid #111827;
+  padding: 2px 2px 3px;
+  font-size: 12px;
+  text-align: right;
+}
+
+.receipt-items th:nth-child(1),
+.receipt-items th:nth-child(2) { text-align: left; }
+
+.receipt-items th:nth-child(1) { width: 7%; }
+.receipt-items th:nth-child(2) { width: 39%; }
+.receipt-items th:nth-child(3) { width: 11%; }
+.receipt-items th:nth-child(4) { width: 17%; }
+.receipt-items th:nth-child(5) { width: 10%; }
+.receipt-items th:nth-child(6) { width: 16%; }
+
+.receipt-items td {
+  border-bottom: 1px dashed #d1d5db;
+  padding: 6px 2px;
+  vertical-align: top;
+  text-align: right;
+}
+
+.receipt-items td:nth-child(1),
+.receipt-items td:nth-child(2) { text-align: left; }
+
+.receipt-items td:nth-child(2) b,
+.receipt-items td:nth-child(2) span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.receipt-items td:nth-child(2) b {
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.receipt-items td:nth-child(2) span {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.receipt-totals {
+  margin-top: 8px;
+  border-top: 1px solid #111827;
+  padding-top: 4px;
+}
+
+.receipt-totals div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 1px 0;
+}
+
+.receipt-totals span {
+  min-width: 70px;
+  text-align: left;
+}
+
+.receipt-totals b {
+  min-width: 86px;
+  text-align: right;
+}
+
+.receipt-grand {
+  border-top: 1px solid #111827;
+  margin-top: 3px;
+  padding-top: 4px !important;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipt-print-only {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 80mm;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 @media print {
-  body * { visibility: hidden; }
-  #receipt-print, #receipt-print * { visibility: visible; }
-  #receipt-print { position: absolute; left: 0; top: 0; width: 100%; }
+  @page { size: 80mm auto; margin: 3mm; }
+
+  html,
+  body {
+    width: 80mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #root,
+  #root > div,
+  main {
+    width: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  #root > div > div:first-child,
+  main > :not(.fixed) {
+    display: none !important;
+  }
+
+  body * { visibility: hidden !important; }
+  #receipt-print, #receipt-print * { visibility: visible !important; }
+  #receipt-print {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 74mm !important;
+    max-width: 74mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .receipt-print-only {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
   .no-print { display: none !important; }
 }
