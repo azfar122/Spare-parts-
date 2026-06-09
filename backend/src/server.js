@@ -27,6 +27,7 @@ function normalizeOrigin(url) {
 const configuredClientUrls = [
   ...(process.env.CLIENT_URL || '').split(','),
   process.env.VERCEL_URL,
+  process.env.VERCEL_BRANCH_URL,
   'http://localhost:5173'
 ];
 const configuredOrigins = configuredClientUrls.map(normalizeOrigin).filter(Boolean);
@@ -36,9 +37,20 @@ const localTwinOrigins = configuredOrigins.map(origin =>
     : origin.replace('127.0.0.1', 'localhost')
 );
 const allowedOrigins = [...new Set([...configuredOrigins, ...localTwinOrigins])];
+function isAllowedOrigin(origin) {
+  if (allowedOrigins.includes(origin)) return true;
+  if (process.env.VERCEL === '1') {
+    try {
+      return new URL(origin).hostname.endsWith('.vercel.app');
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || isAllowedOrigin(origin)) return callback(null, true);
     return callback(new Error(`CORS origin not allowed: ${origin}`));
   },
   credentials: true
