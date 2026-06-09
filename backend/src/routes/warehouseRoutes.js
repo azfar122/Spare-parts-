@@ -3,6 +3,7 @@ import Warehouse from '../models/Warehouse.js';
 import WarehouseStock from '../models/WarehouseStock.js';
 import Product from '../models/Product.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { productSearchConditions, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -17,6 +18,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
     const { name, location = '', notes = '' } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: 'Warehouse name is required' });
     const warehouse = await Warehouse.create({ name: name.trim(), location, notes, createdBy: req.user._id });
+    req.app.get('io').emit('inventory:bulk-update');
     res.status(201).json(warehouse);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -29,6 +31,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     if (!name?.trim()) return res.status(400).json({ message: 'Warehouse name is required' });
     const warehouse = await Warehouse.findByIdAndUpdate(req.params.id, { name: name.trim(), location, notes }, { new: true, runValidators: true });
     if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    req.app.get('io').emit('inventory:bulk-update');
     res.json(warehouse);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -38,15 +41,11 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
 router.get('/stock', requireRole('admin'), async (req, res) => {
   const { warehouseId, q = '', page = 1, limit = 50 } = req.query;
   const productFilter = { active: { $ne: false } };
-  if (q) productFilter.$or = [
-    { partName: new RegExp(q, 'i') },
-    { partCode: new RegExp(q, 'i') },
-    { model: new RegExp(q, 'i') }
-  ];
+  if (q) productFilter.$or = productSearchConditions(q);
 
   const skip = (Number(page) - 1) * Number(limit);
   const [products, total] = await Promise.all([
-    Product.find(productFilter).sort({ partName: 1 }).skip(skip).limit(Number(limit)),
+    Product.find(productFilter).sort({ Sr: 1, partName: 1, 'Product Name': 1 }).skip(skip).limit(Number(limit)).lean(),
     Product.countDocuments(productFilter)
   ]);
 
@@ -56,7 +55,7 @@ router.get('/stock', requireRole('admin'), async (req, res) => {
   const stockByProduct = new Map(stocks.map(stock => [String(stock.product), stock]));
   res.json({
     items: products.map(product => ({
-      product,
+      product: serializeProduct(product),
       warehouseStock: stockByProduct.get(String(product._id))?.quantity || 0
     })),
     total,
@@ -87,7 +86,7 @@ router.put('/:warehouseId/stock/:productId', requireRole('admin'), async (req, r
       { warehouse: warehouse._id, product: product._id },
       { quantity, updatedBy: req.user._id },
       { new: true, upsert: true, runValidators: true }
-    ).populate('warehouse', 'name location').populate('product', 'partName partCode model');
+    ).populate('warehouse', 'name location').populate('product', 'partName partCode model brand category type bookingPrice mrp');
 
     req.app.get('io').emit('inventory:bulk-update');
     res.json(stock);

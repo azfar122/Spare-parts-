@@ -4,6 +4,7 @@ const purchaseOrderItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
   partName: String,
   partCode: { type: String, required: true },
+  brand: String,
   model: { type: String, default: 'COMMON' },
   qty: { type: Number, required: true, min: 1 },
   price: { type: Number, min: 0 },

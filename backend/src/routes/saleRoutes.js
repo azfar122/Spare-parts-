@@ -7,6 +7,7 @@ import WarehouseStock from '../models/WarehouseStock.js';
 import Customer from '../models/Customer.js';
 import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { productLabel, productPrice, productStock, productStockSet, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -14,6 +15,7 @@ router.use(requireAuth);
 router.get('/', requireRole('admin'), async (req, res) => {
   const { startDate, endDate, productCode, productName, page = 1, limit = 50 } = req.query;
   const filter = {};
+  const productSearchActive = Boolean(productCode || productName);
   
   if (startDate || endDate) {
     filter.createdAt = {};
@@ -36,7 +38,48 @@ router.get('/', requireRole('admin'), async (req, res) => {
     Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email').populate('customer', 'name phone currentBalance'),
     Sale.countDocuments(filter)
   ]);
-  res.json({ items: sales, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+
+  const codePattern = productCode ? new RegExp(productCode, 'i') : null;
+  const namePattern = productName ? new RegExp(productName, 'i') : null;
+  const summarizeMatchedItems = saleItems => {
+    const matchedItems = saleItems.filter(item => {
+      const codeMatches = codePattern && codePattern.test(item.partCode || '');
+      const nameMatches = namePattern && namePattern.test(item.partName || '');
+      return codeMatches || nameMatches;
+    });
+
+    return {
+      matchedItems,
+      matchedQty: matchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+      matchedAmount: matchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0)
+    };
+  };
+
+  const items = productSearchActive
+    ? sales.map(sale => {
+      const saleObject = sale.toObject();
+      const matched = summarizeMatchedItems(saleObject.items);
+      return {
+        ...saleObject,
+        ...matched
+      };
+    })
+    : sales;
+
+  let matchedSummary = null;
+  if (productSearchActive) {
+    const allMatchingSales = await Sale.find(filter).select('items').lean();
+    const allMatchedItems = allMatchingSales.flatMap(sale => summarizeMatchedItems(sale.items || []).matchedItems);
+    const productNames = [...new Set(allMatchedItems.map(item => item.partName).filter(Boolean))];
+    matchedSummary = {
+      productNames,
+      qty: allMatchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+      amount: allMatchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0),
+      bills: allMatchingSales.length
+    };
+  }
+
+  res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)), matchedSummary });
 });
 
 router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, res) => {
@@ -92,37 +135,44 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
     }
 
     for (const item of items) {
-      const product = await Product.findById(item.productId).session(session);
+      const product = await Product.findById(item.productId).session(session).lean();
       if (!product) throw new Error('Product not found');
+      const productData = serializeProduct(product);
       const qty = Number(item.qty);
       const discount = Number(item.discount || 0);
       if (qty <= 0) throw new Error('Invalid quantity');
 
-      const inventoryQtyUsed = Math.min(Number(product.quantity || 0), qty);
+      const currentStock = productStock(product);
+      const inventoryQtyUsed = Math.min(currentStock, qty);
       const warehouseQtyNeeded = qty - inventoryQtyUsed;
       let warehouseStock = null;
       let warehouseQtyUsed = 0;
       let warehouseName = '';
 
       if (warehouseQtyNeeded > 0) {
-        if (!item.warehouseId) throw new Error(`Select a warehouse for ${product.partCode}. Main inventory is short by ${warehouseQtyNeeded}`);
+        if (!item.warehouseId) throw new Error(`Select a warehouse for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
         warehouseStock = await WarehouseStock.findOne({ warehouse: item.warehouseId, product: product._id })
           .populate('warehouse', 'name')
           .session(session);
         if (!warehouseStock || Number(warehouseStock.quantity || 0) < warehouseQtyNeeded) {
-          throw new Error(`Selected warehouse does not have enough stock for ${product.partCode}`);
+          throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
         }
         warehouseQtyUsed = warehouseQtyNeeded;
         warehouseName = warehouseStock.warehouse?.name || '';
       }
 
-      const price = Number(item.price ?? product.mrp);
+      const price = Number(item.price ?? productPrice(product));
       const gross = price * qty;
       const lineTotal = Math.max(0, gross - discount);
       subtotal += gross;
       discountTotal += discount;
-      product.quantity -= inventoryQtyUsed;
-      await product.save({ session });
+      if (inventoryQtyUsed > 0) {
+        await Product.collection.updateOne(
+          { _id: product._id },
+          { $set: productStockSet(currentStock - inventoryQtyUsed) },
+          { session }
+        );
+      }
 
       if (warehouseStock && warehouseQtyUsed > 0) {
         warehouseStock.quantity -= warehouseQtyUsed;
@@ -131,9 +181,9 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
 
       saleItems.push({
         product: product._id,
-        partName: product.partName,
-        partCode: product.partCode,
-        model: product.model,
+        partName: productData.partName,
+        partCode: productData.partCode,
+        model: productData.type || productData.model,
         qty,
         price,
         discount,

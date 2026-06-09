@@ -48,9 +48,8 @@ async function addLedgerEntry({ customer, type, sale, description, debit = 0, cr
 
 router.get('/', requireRole('sales', 'admin'), async (req, res) => {
   const { q = '', page = 1, limit = 20 } = req.query;
-  const filter = q
-    ? { $or: [{ name: new RegExp(q, 'i') }, { phone: new RegExp(q, 'i') }] }
-    : {};
+  const filter = { active: { $ne: false } };
+  if (q) filter.$or = [{ name: new RegExp(q, 'i') }, { phone: new RegExp(q, 'i') }];
   const skip = (Number(page) - 1) * Number(limit);
   const [items, total] = await Promise.all([
     Customer.find(filter).sort({ name: 1 }).skip(skip).limit(Number(limit)),
@@ -100,7 +99,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
 });
 
 router.get('/:id', requireRole('sales', 'admin'), async (req, res) => {
-  const customer = await Customer.findById(req.params.id);
+  const customer = await Customer.findOne({ _id: req.params.id, active: { $ne: false } });
   if (!customer) return res.status(404).json({ message: 'Customer not found' });
 
   const [ledger, sales] = await Promise.all([
@@ -121,6 +120,16 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
   );
   if (!customer) return res.status(404).json({ message: 'Customer not found' });
   res.json(customer);
+});
+
+router.delete('/:id', requireRole('admin'), async (req, res) => {
+  const customer = await Customer.findByIdAndUpdate(
+    req.params.id,
+    { active: false },
+    { new: true }
+  );
+  if (!customer) return res.status(404).json({ message: 'Customer not found' });
+  res.json({ message: 'Customer deleted', customer });
 });
 
 router.post('/:id/payment', requireRole('admin'), async (req, res) => {

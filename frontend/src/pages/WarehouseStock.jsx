@@ -85,11 +85,13 @@ export default function WarehouseStock() {
   }
 
   const totalWarehouseStock = stockRows.reduce((sum, row) => sum + Number(row.warehouseStock || 0), 0);
+  const productName = product => product.productName || product.partName || '-';
+  const partNo = product => product.partNo || product.partCode || '-';
 
-  return <Layout title="Warehouse Stock" subtitle="Manage backup stock separately from main inventory.">
+  return <Layout title="Warehouse Stock" subtitle="Manage backup stock separately from main inventory." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-      <aside className="rounded-3xl border bg-white shadow-soft">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
+      <aside className="min-w-0 rounded-3xl border bg-white shadow-soft">
         <div className="flex items-center justify-between border-b p-5">
           <div>
             <p className="text-sm text-slate-500">Warehouses</p>
@@ -113,7 +115,7 @@ export default function WarehouseStock() {
         </div>}
       </aside>
 
-      <section className="rounded-3xl border bg-white shadow-soft">
+      <section className="min-w-0 rounded-3xl border bg-white shadow-soft">
         {!selectedWarehouse ? <div className="grid min-h-[520px] place-items-center p-8 text-center text-slate-500">Add or select a warehouse to manage stock.</div> : <>
           <div className="border-b p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -129,22 +131,37 @@ export default function WarehouseStock() {
             <form onSubmit={e => { e.preventDefault(); loadStock(); }} className="mt-5 flex gap-3">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product by name, code or model" className="w-full rounded-xl border py-3 pl-9 pr-3" />
+                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product name, part no, brand, category or type" className="w-full rounded-xl border py-3 pl-9 pr-3" />
               </div>
               <button className="rounded-xl border px-4"><RefreshCw size={18}/></button>
             </form>
           </div>
-          <div className="max-h-[640px] overflow-auto">
-            {loadingStock ? <LoadingState label="Loading warehouse stock..." /> : <table className="w-full text-sm">
+          <div className="max-h-[640px] max-w-full overflow-auto">
+            {loadingStock ? <LoadingState label="Loading warehouse stock..." /> : <table className="w-full min-w-[1300px] text-sm">
               <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                <tr><th className="p-4 text-left">Product</th><th className="p-4 text-left">Code</th><th className="p-4 text-center">Model</th><th className="p-4 text-right">Main Qty</th><th className="p-4 text-right">Warehouse Qty</th><th className="p-4 text-right">Action</th></tr>
+                <tr>
+                  <th className="p-4 text-left">Sr No.</th>
+                  <th className="p-4 text-left">Product Name</th>
+                  <th className="p-4 text-left">Part No</th>
+                  <th className="p-4 text-left">Brand</th>
+                  <th className="p-4 text-left">Category</th>
+                  <th className="p-4 text-left">Type</th>
+                  <th className="p-4 text-right">Retail Price(RP)</th>
+                  <th className="p-4 text-right">Main Qty</th>
+                  <th className="p-4 text-right">Warehouse Qty</th>
+                  <th className="p-4 text-right">Action</th>
+                </tr>
               </thead>
               <tbody>
-                {stockRows.map(row => (
+                {stockRows.map((row, index) => (
                   <tr key={row.product._id} className="border-t">
-                    <td className="p-4 font-semibold">{row.product.partName}</td>
-                    <td className="p-4 text-slate-500">{row.product.partCode}</td>
-                    <td className="p-4 text-center">{row.product.model}</td>
+                    <td className="p-4 font-semibold text-slate-500">{index + 1}</td>
+                    <td className="p-4 font-semibold">{productName(row.product)}</td>
+                    <td className="p-4 text-slate-500">{partNo(row.product)}</td>
+                    <td className="p-4 text-slate-500">{row.product.brand || '-'}</td>
+                    <td className="p-4 text-slate-500">{row.product.category || '-'}</td>
+                    <td className="p-4 text-slate-500">{row.product.type || row.product.model || '-'}</td>
+                    <td className="p-4 text-right">Rs {Number(row.product.mrp || 0).toLocaleString()}</td>
                     <td className="p-4 text-right">{row.product.quantity}</td>
                     <td className="p-4 text-right"><input id={`warehouse-stock-${row.product._id}`} type="number" min="0" defaultValue={row.warehouseStock} className="w-28 rounded-xl border p-2 text-right" /></td>
                     <td className="p-4 text-right">

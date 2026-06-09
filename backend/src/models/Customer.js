@@ -7,6 +7,7 @@ const customerSchema = new mongoose.Schema({
   notes: { type: String, trim: true, default: '' },
   openingBalance: { type: Number, default: 0 },
   currentBalance: { type: Number, default: 0 },
+  active: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 

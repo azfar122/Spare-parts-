@@ -16,31 +16,97 @@ export default function SalesAnalytics() {
   const [productName, setProductName] = useState('');
   const [selectedSale, setSelectedSale] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [productSearchActive, setProductSearchActive] = useState(false);
+  const [productSuggestions, setProductSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchPrompt, setSearchPrompt] = useState('Enter at least one filter to search sales.');
+  const [matchedSummary, setMatchedSummary] = useState(null);
   const limit = 50;
 
-  async function load(pageNum = 1) {
+  async function load(pageNum = 1, overrides = {}) {
     try {
       setLoading(true);
+      setSearchPrompt('');
+      const filters = {
+        startDate,
+        endDate,
+        productCode,
+        productName,
+        ...overrides
+      };
+      const hasFilters = Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim());
+      if (!hasFilters) {
+        setSales([]);
+        setTotal(0);
+        setPage(1);
+        setProductSearchActive(false);
+        setMatchedSummary(null);
+        setSearchPrompt('Enter a date, part code, or product name before searching.');
+        return;
+      }
+
       const params = { page: pageNum, limit };
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
-      if (productCode) params.productCode = productCode;
-      if (productName) params.productName = productName;
+      if (filters.startDate) params.startDate = filters.startDate;
+      if (filters.endDate) params.endDate = filters.endDate;
+      if (filters.productCode) params.productCode = filters.productCode;
+      if (filters.productName) params.productName = filters.productName;
 
       const r = await api.get('/sales', { params });
       setSales(r.data.items);
       setTotal(r.data.total || 0);
       setPage(pageNum);
+      setProductSearchActive(Boolean(filters.productCode?.trim() || filters.productName?.trim()));
+      setMatchedSummary(r.data.matchedSummary || null);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(1); }, []);
+  useEffect(() => {
+    const search = productName.trim();
+    if (search.length < 2) {
+      setProductSuggestions([]);
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const r = await api.get('/products', { params: { q: search, limit: 8 } });
+        setProductSuggestions(r.data.items || []);
+      } catch (err) {
+        setProductSuggestions([]);
+      }
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [productName]);
 
   function handleSearch(e) {
     e.preventDefault();
     load(1);
+  }
+
+  function clearFilters() {
+    setStartDate('');
+    setEndDate('');
+    setProductCode('');
+    setProductName('');
+    setSales([]);
+    setTotal(0);
+    setPage(1);
+    setProductSearchActive(false);
+    setMatchedSummary(null);
+    setProductSuggestions([]);
+    setSearchPrompt('Enter at least one filter to search sales.');
+  }
+
+  function matchedProductNames(sale) {
+    const names = (sale.matchedItems || []).map(item => item.partName).filter(Boolean);
+    return [...new Set(names)].join(', ') || '-';
+  }
+
+  function summaryProductNames() {
+    return matchedSummary?.productNames?.length ? matchedSummary.productNames.join(', ') : productName || productCode || '-';
   }
 
   const totalPages = Math.ceil(total / limit);
@@ -48,30 +114,71 @@ export default function SalesAnalytics() {
   return <Layout title="Sales Analytics" subtitle="View and search all sales transactions by date and product.">
     <div className="rounded-3xl bg-white p-6 shadow-soft border mb-6">
       <h3 className="font-bold text-lg mb-4">Filters</h3>
-      <form onSubmit={handleSearch} className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <div>
-          <label className="text-sm font-medium text-slate-600">Start Date</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
+      <form onSubmit={handleSearch}>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="text-sm font-medium text-slate-600">Start Date</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-600">End Date</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-600">Part Code</label>
+            <input type="text" value={productCode} onChange={e => setProductCode(e.target.value)} placeholder="Search by part code" className="mt-1 w-full rounded-xl border p-3" />
+          </div>
+          <div className="relative">
+            <label className="text-sm font-medium text-slate-600">Product Name</label>
+            <input type="text" value={productName} onFocus={() => setShowSuggestions(true)} onBlur={() => window.setTimeout(() => setShowSuggestions(false), 120)} onChange={e => { setProductName(e.target.value); setShowSuggestions(true); }} placeholder="Search by product name" className="mt-1 w-full rounded-xl border p-3" />
+            {showSuggestions && productSuggestions.length > 0 && <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-soft">
+              {productSuggestions.map(product => (
+                <button
+                  key={product._id}
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => {
+                    setProductName(product.productName || product.partName || '');
+                    setProductCode(product.partNo || product.partCode || '');
+                    setShowSuggestions(false);
+                  }}
+                  className="w-full border-b p-3 text-left last:border-b-0 hover:bg-slate-50"
+                >
+                  <span className="block font-semibold">{product.productName || product.partName}</span>
+                  <span className="text-xs text-slate-500">{[product.partNo || product.partCode, product.brand, product.category].filter(Boolean).join(' · ') || 'No part details'}</span>
+                </button>
+              ))}
+            </div>}
+          </div>
         </div>
-        <div>
-          <label className="text-sm font-medium text-slate-600">End Date</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
+        <div className="mt-4 flex flex-col gap-2 md:flex-row">
+          <button type="submit" disabled={loading} className="w-full md:w-auto rounded-xl bg-brand-dark text-white px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-70 inline-flex items-center justify-center gap-2">
+            {loading && <ButtonSpinner />}
+            {loading ? 'Searching...' : 'Search'}
+          </button>
+          <button type="button" onClick={clearFilters} className="w-full md:w-auto rounded-xl border px-6 py-3 font-medium">Clear Filters</button>
         </div>
-        <div>
-          <label className="text-sm font-medium text-slate-600">Part Code</label>
-          <input type="text" value={productCode} onChange={e => setProductCode(e.target.value)} placeholder="Search by part code" className="mt-1 w-full rounded-xl border p-3" />
-        </div>
-        <div>
-          <label className="text-sm font-medium text-slate-600">Part Name</label>
-          <input type="text" value={productName} onChange={e => setProductName(e.target.value)} placeholder="Search by part name" className="mt-1 w-full rounded-xl border p-3" />
-        </div>
+        <p className="mt-3 text-sm text-slate-500">Bill Subtotal is before discount. Bill Total is after discount.</p>
       </form>
-      <button onClick={handleSearch} disabled={loading} className="w-full md:w-auto rounded-xl bg-brand-dark text-white px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-70 inline-flex items-center justify-center gap-2">
-        {loading && <ButtonSpinner />}
-        {loading ? 'Searching...' : 'Search'}
-      </button>
-      <button onClick={() => { setStartDate(''); setEndDate(''); setProductCode(''); setProductName(''); load(1); }} className="w-full md:w-auto ml-2 rounded-xl border px-6 py-3 font-medium">Clear Filters</button>
     </div>
+
+    {searchPrompt && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{searchPrompt}</div>}
+
+    {productSearchActive && matchedSummary && <div className="mb-5 grid gap-4 md:grid-cols-3">
+      <div className="rounded-2xl border bg-white p-5 shadow-soft">
+        <p className="text-sm font-medium text-slate-500">Product</p>
+        <p className="mt-2 text-lg font-bold text-slate-900">{summaryProductNames()}</p>
+      </div>
+      <div className="rounded-2xl border bg-white p-5 shadow-soft">
+        <p className="text-sm font-medium text-slate-500">Total Sold Qty</p>
+        <p className="mt-2 text-3xl font-bold text-brand-red">{Number(matchedSummary.qty || 0).toLocaleString()}</p>
+      </div>
+      <div className="rounded-2xl border bg-white p-5 shadow-soft">
+        <p className="text-sm font-medium text-slate-500">Total Product Amount</p>
+        <p className="mt-2 text-3xl font-bold text-slate-900">Rs {Number(matchedSummary.amount || 0).toLocaleString()}</p>
+        <p className="mt-1 text-xs text-slate-500">Across {Number(matchedSummary.bills || 0).toLocaleString()} bill(s)</p>
+      </div>
+    </div>}
 
     <div className="rounded-3xl bg-white shadow-soft border overflow-hidden">
       {loading ? <LoadingState label="Loading sales..." /> : <table className="w-full text-sm">
@@ -81,9 +188,12 @@ export default function SalesAnalytics() {
             <th className="p-4 text-left">Date</th>
             <th className="p-4 text-left">Customer</th>
             <th className="p-4 text-right">Items</th>
-            <th className="p-4 text-right">Subtotal</th>
+            {productSearchActive && <th className="p-4 text-left">Product Name</th>}
+            {productSearchActive && <th className="p-4 text-right">Matched Qty</th>}
+            {productSearchActive && <th className="p-4 text-right">Matched Amount</th>}
+            <th className="p-4 text-right">Bill Subtotal</th>
             <th className="p-4 text-right">Discount</th>
-            <th className="p-4 text-right">Total</th>
+            <th className="p-4 text-right">Bill Total</th>
             <th className="p-4 text-center">Action</th>
           </tr>
         </thead>
@@ -94,6 +204,9 @@ export default function SalesAnalytics() {
               <td className="p-4">{new Date(sale.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
               <td className="p-4">{sale.customerName}</td>
               <td className="p-4 text-right">{sale.items.length}</td>
+              {productSearchActive && <td className="p-4 font-semibold">{matchedProductNames(sale)}</td>}
+              {productSearchActive && <td className="p-4 text-right font-semibold">{Number(sale.matchedQty || 0).toLocaleString()}</td>}
+              {productSearchActive && <td className="p-4 text-right font-semibold">Rs {Number(sale.matchedAmount || 0).toLocaleString()}</td>}
               <td className="p-4 text-right">Rs {Number(sale.subtotal).toLocaleString()}</td>
               <td className="p-4 text-right">Rs {Number(sale.discountTotal).toLocaleString()}</td>
               <td className="p-4 text-right font-bold">Rs {Number(sale.grandTotal).toLocaleString()}</td>
@@ -102,7 +215,7 @@ export default function SalesAnalytics() {
           ))}
         </tbody>
       </table>}
-      {!loading && sales.length === 0 && <div className="text-center py-8 text-slate-500">No sales found</div>}
+      {!loading && sales.length === 0 && !searchPrompt && <div className="text-center py-8 text-slate-500">No sales found</div>}
     </div>
 
     {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
@@ -130,7 +243,7 @@ export default function SalesAnalytics() {
           <p className="font-semibold mb-2">Items Sold</p>
           <div className="space-y-2">
             {selectedSale.items.map((item, idx) => (
-              <div key={idx} className="bg-slate-50 p-3 rounded-lg">
+              <div key={idx} className={`p-3 rounded-lg ${selectedSale.matchedItems?.some(matched => String(matched.product) === String(item.product)) ? 'bg-red-50 ring-1 ring-brand-red/20' : 'bg-slate-50'}`}>
                 <div className="flex justify-between"><span className="font-semibold">{item.partName}</span><span>{item.qty}x</span></div>
                 <div className="text-xs text-slate-500">{item.partCode} · {item.model}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">

@@ -1,19 +1,20 @@
 import { BookOpen, Building2, LogOut, ShieldCheck, Store, BarChart3, Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Link, useLocation } from 'react-router-dom';
+import logo from '../assets/atlas-honda-logo.png';
 
-export default function Layout({ title, subtitle, children }) {
+export default function Layout({ title, subtitle, children, wide = false }) {
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  return <div className="min-h-screen">
-    <div className="bg-brand-dark text-white">
-      <div className="mx-auto max-w-7xl px-6 py-5 flex items-center justify-between">
+  return <div className="min-h-screen overflow-x-hidden">
+    <div className="w-full bg-brand-dark text-white">
+      <div className="mx-auto flex max-w-[calc(100vw-3rem)] items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-brand-red grid place-items-center shadow-soft"><Store /></div>
-          <div><h1 className="text-xl font-bold">Bike Spare Parts SaaS</h1><p className="text-sm text-slate-300">Inventory, sales receipts and returns</p></div>
+          <img src={logo} alt="Asif Auto Traders" className="h-14 w-20 rounded-xl bg-white object-contain p-1.5 shadow-soft" />
+          <div><h1 className="text-xl font-bold">Asif Auto Traders</h1><p className="text-sm text-slate-300">Inventory, sales receipts and returns</p></div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="ml-auto flex items-center gap-4">
           {user?.role === 'admin' && (
             <div className="flex gap-2">
               <Link to="/admin" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
@@ -38,7 +39,7 @@ export default function Layout({ title, subtitle, children }) {
         </div>
       </div>
     </div>
-    <main className="mx-auto max-w-7xl px-6 py-8">
+    <main className={`mx-auto px-6 py-8 ${wide ? 'max-w-[calc(100vw-3rem)]' : 'max-w-7xl'}`}>
       <div className="mb-7"><h2 className="text-3xl font-bold tracking-tight">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
       {children}
     </main>

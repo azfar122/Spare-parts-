@@ -20,6 +20,7 @@ export default function SalesDashboard() {
   const [receipt, setReceipt] = useState(null);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [customers, setCustomers] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [warehouseOptions, setWarehouseOptions] = useState({});
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerMode, setCustomerMode] = useState('walk-in');
@@ -73,12 +74,21 @@ export default function SalesDashboard() {
     setCustomers(r.data.items || []);
   }
 
+  async function loadWarehouses() {
+    const r = await api.get('/warehouses');
+    setWarehouses(r.data || []);
+  }
+
   useEffect(() => { load(1); }, [q, inStockOnly]);
   useEffect(() => { loadCustomers(''); }, []);
+  useEffect(() => { loadWarehouses(); }, []);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
     s.on('inventory:update', () => load(page));
-    s.on('inventory:bulk-update', () => load(page));
+    s.on('inventory:bulk-update', () => {
+      load(page);
+      loadWarehouses();
+    });
     return () => s.disconnect();
   }, [page]);
 
@@ -98,6 +108,7 @@ export default function SalesDashboard() {
       discount: 0,
       stock: p.quantity,
       warehouseQuantity: p.warehouseQuantity || 0,
+      warehouseStocks: p.warehouseStocks || [],
       warehouseId: ''
     }]);
     if (Number(p.quantity || 0) <= 0 && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
@@ -145,6 +156,17 @@ export default function SalesDashboard() {
   function addSelectedProduct() {
     const product = products[selectedProductIndex];
     if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
+  }
+
+  function warehouseSummary(item) {
+    const stocks = warehouses
+      .map(warehouse => ({
+        name: warehouse.name,
+        quantity: Number(item.warehouseStocks?.find(stock => String(stock.warehouseId) === String(warehouse._id))?.quantity || 0)
+      }))
+      .filter(stock => stock.quantity > 0);
+    if (!stocks.length) return 'Warehouse 0';
+    return stocks.map(stock => `${stock.name} ${stock.quantity}`).join(' · ');
   }
 
   function focusCartField(row, field) {
@@ -317,11 +339,11 @@ export default function SalesDashboard() {
   const billTotal = totals.sub - totals.dis;
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
 
-  return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns.">
+  return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <div className="grid lg:grid-cols-[1fr_420px] gap-6">
-      <div>
-        <div className="mb-5 flex gap-3">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="min-w-0">
+        <div className="mb-5 flex min-w-0 flex-wrap gap-3 xl:flex-nowrap">
           <div className="flex-1 relative">
             <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
@@ -343,6 +365,8 @@ export default function SalesDashboard() {
           onMoveSelection={moveProductSelection}
           onAddSale={addSale}
           onDetail={()=>{}}
+          startIndex={(page - 1) * limit}
+          warehouseColumns={warehouses}
         />}
         {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
@@ -359,7 +383,7 @@ export default function SalesDashboard() {
           <button onClick={() => load(page + 1)} disabled={page === totalPages} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">Next<ChevronRight size={16}/></button>
         </div>}
       </div>
-      <aside className="rounded-3xl bg-white p-5 shadow-soft border h-fit sticky top-5">
+      <aside className="w-full rounded-3xl bg-white p-4 shadow-soft border h-fit sticky top-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold">Current Bill</h3>
           {cart.length > 0 && <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>}
@@ -379,7 +403,7 @@ export default function SalesDashboard() {
               <X size={16} />
             </button>
             <div className="font-semibold break-words">{i.partName}</div>
-            <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · Warehouse {i.warehouseQuantity || 0}</div>
+            <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · {warehouseSummary(i)}</div>
             <div className="grid grid-cols-3 gap-2 mt-3">
               <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={Number(i.stock || 0) + Number(i.warehouseQuantity || 0)} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>updateCartQty(idx,e.target.value,i)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Price</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>

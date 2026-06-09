@@ -6,6 +6,7 @@ import Sale from '../models/Sale.js';
 import Customer from '../models/Customer.js';
 import { addLedgerEntry } from './customerRoutes.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { productStock, productStockSet, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -79,8 +80,9 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       const returnableQty = Number(saleItem.qty || 0) - alreadyReturnedQty;
       if (item.qty > returnableQty) throw new Error(`Only ${returnableQty} item(s) can be returned for ${saleItem.partName}`);
 
-      const product = await Product.findById(item.productId).session(session);
+      const product = await Product.findById(item.productId).session(session).lean();
       if (!product) throw new Error('Product not found');
+      const productData = serializeProduct(product);
 
       const calculatedRefund = (Number(saleItem.lineTotal || 0) / Number(saleItem.qty || 1)) * item.qty;
       const refundAmount = item.amountRefunded === undefined || item.amountRefunded === ''
@@ -88,9 +90,13 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         : Number(item.amountRefunded || 0);
       if (!Number.isFinite(refundAmount) || refundAmount < 0) throw new Error('Refund amount must be zero or greater');
 
-      product.quantity += item.qty;
-      await product.save({ session });
-      productsToEmit.push(product);
+      const nextStock = productStock(product) + item.qty;
+      await Product.collection.updateOne(
+        { _id: product._id },
+        { $set: productStockSet(nextStock) },
+        { session }
+      );
+      productsToEmit.push({ ...productData, quantity: nextStock });
       totalRefundAmount += refundAmount;
 
       returnDocs.push({
@@ -99,8 +105,8 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         customer: customer?._id,
         customerName: customer?.name || sale.customerName || 'Walk-in Customer',
         product: product._id,
-        partName: saleItem.partName || product.partName,
-        partCode: saleItem.partCode || product.partCode,
+        partName: saleItem.partName || productData.partName,
+        partCode: saleItem.partCode || productData.partCode,
         originalQty: saleItem.qty,
         originalPrice: saleItem.price,
         originalLineTotal: saleItem.lineTotal,

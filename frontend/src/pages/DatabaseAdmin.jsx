@@ -80,9 +80,9 @@ export default function DatabaseAdmin() {
 
     {activeTab === 'products' && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Part Code</th><th className="p-4 text-left">Part Name</th><th className="p-4 text-left">Model</th><th className="p-4 text-right">MRP</th><th className="p-4 text-right">Booking Price</th><th className="p-4 text-right">Qty</th><th className="p-4 text-right">Min Order</th></tr></thead>
+        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Part No</th><th className="p-4 text-left">Product Name</th><th className="p-4 text-left">Brand</th><th className="p-4 text-left">Category</th><th className="p-4 text-left">Type</th><th className="p-4 text-right">Retail Price(RP)</th><th className="p-4 text-right">Stock Qty</th></tr></thead>
         <tbody>
-          {products.slice(0, 100).map(p => <tr key={p._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold text-brand-red">{p.partCode}</td><td className="p-4">{p.partName}</td><td className="p-4 text-slate-500">{p.model}</td><td className="p-4 text-right">Rs {Number(p.mrp).toLocaleString()}</td><td className="p-4 text-right">Rs {Number(p.bookingPrice).toLocaleString()}</td><td className="p-4 text-right"><span className={p.quantity <= 5 ? 'text-red-600 font-bold' : ''}>{p.quantity}</span></td><td className="p-4 text-right">{p.minOrderQty}</td></tr>)}
+          {products.slice(0, 100).map(p => <tr key={p._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold text-brand-red">{p.partNo || p.partCode || '-'}</td><td className="p-4">{p.productName || p.partName || '-'}</td><td className="p-4 text-slate-500">{p.brand || '-'}</td><td className="p-4 text-slate-500">{p.category || '-'}</td><td className="p-4 text-slate-500">{p.type || p.model || '-'}</td><td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td><td className="p-4 text-right"><span className={p.quantity <= 5 ? 'text-red-600 font-bold' : ''}>{p.quantity}</span></td></tr>)}
         </tbody>
       </table>
       {products.length > 100 && <div className="p-4 text-slate-500 text-sm border-t">Showing first 100 of {products.length} products</div>}

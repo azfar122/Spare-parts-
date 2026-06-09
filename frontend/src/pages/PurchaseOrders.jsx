@@ -24,7 +24,7 @@ export default function PurchaseOrders() {
   const [formData, setFormData] = useState({
     orderNumber: '',
     totalPrice: '',
-    items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }],
+    items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }],
     notes: ''
   });
   const [searchQueries, setSearchQueries] = useState({});
@@ -66,12 +66,15 @@ export default function PurchaseOrders() {
         items: formData.items.map(item => ({
           product: item.productId || undefined,
           partCode: item.partCode,
-          partName: item.partName,          model: item.model || 'COMMON',          qty: Number(item.qty),
+          partName: item.partName,
+          brand: item.brand || '',
+          model: item.model || 'COMMON',
+          qty: Number(item.qty),
           price: item.price ? Number(item.price) : undefined
         })),
         notes: formData.notes
       });
-      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', model: '', qty: 1, productId: null, price: '' }], notes: '' });
+      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }], notes: '' });
       setShowForm(false);
       await loadOrders(1);
       setNotice({ type: 'success', title: 'Order Created', message: 'Purchase order created successfully.' });
@@ -189,7 +192,7 @@ export default function PurchaseOrders() {
                             key={p._id}
                             onClick={() => {
                               const newItems = [...formData.items];
-                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode, partName: p.partName, model: p.model, price: p.mrp };
+                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode, partName: p.partName, brand: p.brand || '', model: p.model || 'COMMON', price: p.mrp };
                               setFormData({...formData, items: newItems});
                               setSearchQueries({...searchQueries, [idx]: ''});
                             }}
@@ -216,8 +219,8 @@ export default function PurchaseOrders() {
                   <input value={item.partName} onChange={e => { const newItems = [...formData.items]; newItems[idx].partName = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Part name" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-700">Model</label>
-                  <input value={item.model} onChange={e => { const newItems = [...formData.items]; newItems[idx].model = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Hero, TVS" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                  <label className="text-xs font-medium text-slate-700">Brand</label>
+                  <input value={item.brand || item.model || ''} onChange={e => { const newItems = [...formData.items]; newItems[idx].brand = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="AHL" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Qty</label>
@@ -233,7 +236,7 @@ export default function PurchaseOrders() {
               </div>
             </div>;
           })}
-          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', model: '', qty: 1, productId: null, price: ''}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
+          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', brand: '', qty: 1, productId: null, price: ''}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
         </div>
 
         <div><label className="text-sm font-medium">Notes</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Order notes" className="mt-1 w-full rounded-xl border p-3" /></div>
@@ -258,7 +261,7 @@ export default function PurchaseOrders() {
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <p className="font-semibold">{item.partName}</p>
-                  <p className="text-xs text-slate-500">{item.partCode} • {item.model}</p>
+                  <p className="text-xs text-slate-500">{item.partCode} • {item.brand || item.model || '-'}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.status === 'received' ? 'bg-green-100 text-green-700' : item.status === 'partial' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
               </div>
