@@ -19,31 +19,29 @@ export default function SalesAnalytics() {
   const [productSearchActive, setProductSearchActive] = useState(false);
   const [productSuggestions, setProductSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchPrompt, setSearchPrompt] = useState('Enter at least one filter to search sales.');
+  const [searchPrompt, setSearchPrompt] = useState('');
   const [matchedSummary, setMatchedSummary] = useState(null);
   const limit = 50;
+
+  function buildFilters(overrides = {}) {
+    return {
+      startDate,
+      endDate,
+      productCode,
+      productName,
+      ...overrides
+    };
+  }
+
+  function hasSearchFilters(filters) {
+    return Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim());
+  }
 
   async function load(pageNum = 1, overrides = {}) {
     try {
       setLoading(true);
       setSearchPrompt('');
-      const filters = {
-        startDate,
-        endDate,
-        productCode,
-        productName,
-        ...overrides
-      };
-      const hasFilters = Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim());
-      if (!hasFilters) {
-        setSales([]);
-        setTotal(0);
-        setPage(1);
-        setProductSearchActive(false);
-        setMatchedSummary(null);
-        setSearchPrompt('Enter a date, part code, or product name before searching.');
-        return;
-      }
+      const filters = buildFilters(overrides);
 
       const params = { page: pageNum, limit };
       if (filters.startDate) params.startDate = filters.startDate;
@@ -61,6 +59,8 @@ export default function SalesAnalytics() {
       setLoading(false);
     }
   }
+
+  useEffect(() => { load(1); }, []);
 
   useEffect(() => {
     const search = productName.trim();
@@ -81,23 +81,22 @@ export default function SalesAnalytics() {
     return () => window.clearTimeout(timer);
   }, [productName]);
 
-  function handleSearch(e) {
+  async function handleSearch(e) {
     e.preventDefault();
-    load(1);
+    const emptySearch = !hasSearchFilters(buildFilters());
+    await load(1);
+    if (emptySearch) {
+      setSearchPrompt('Enter at least one filter to search sales.');
+    }
   }
 
   function clearFilters() {
+    setProductSuggestions([]);
     setStartDate('');
     setEndDate('');
     setProductCode('');
     setProductName('');
-    setSales([]);
-    setTotal(0);
-    setPage(1);
-    setProductSearchActive(false);
-    setMatchedSummary(null);
-    setProductSuggestions([]);
-    setSearchPrompt('Enter at least one filter to search sales.');
+    load(1, { startDate: '', endDate: '', productCode: '', productName: '' });
   }
 
   function matchedProductNames(sale) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Building2, Plus, RefreshCw, Search } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Plus, RefreshCw, Search } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import AppNotice from '../components/AppNotice.jsx';
@@ -16,6 +16,8 @@ export default function WarehouseStock() {
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
   const [stockRows, setStockRows] = useState([]);
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loadingWarehouses, setLoadingWarehouses] = useState(false);
   const [loadingStock, setLoadingStock] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -23,6 +25,7 @@ export default function WarehouseStock() {
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
   const [notice, setNotice] = useState(null);
   const [form, setForm] = useState({ name: '', location: '', notes: '' });
+  const limit = 50;
 
   async function loadWarehouses() {
     try {
@@ -37,12 +40,14 @@ export default function WarehouseStock() {
     }
   }
 
-  async function loadStock() {
+  async function loadStock(pageNum = 1) {
     if (!selectedWarehouse) return;
     try {
       setLoadingStock(true);
-      const r = await api.get('/warehouses/stock', { params: { warehouseId: selectedWarehouse._id, q, limit: 100 } });
+      const r = await api.get('/warehouses/stock', { params: { warehouseId: selectedWarehouse._id, q, page: pageNum, limit } });
       setStockRows(r.data.items || []);
+      setTotal(r.data.total || 0);
+      setPage(r.data.page || pageNum);
     } catch (err) {
       setNotice({ type: 'error', title: 'Stock Load Failed', message: errorMessage(err, 'Unable to load warehouse stock.') });
     } finally {
@@ -51,7 +56,7 @@ export default function WarehouseStock() {
   }
 
   useEffect(() => { loadWarehouses(); }, []);
-  useEffect(() => { loadStock(); }, [selectedWarehouse, q]);
+  useEffect(() => { loadStock(1); }, [selectedWarehouse, q]);
 
   async function saveWarehouse(e) {
     e.preventDefault();
@@ -84,7 +89,7 @@ export default function WarehouseStock() {
     }
   }
 
-  const totalWarehouseStock = stockRows.reduce((sum, row) => sum + Number(row.warehouseStock || 0), 0);
+  const totalPages = Math.ceil(total / limit);
   const productName = product => product.productName || product.partName || '-';
   const partNo = product => product.partNo || product.partCode || '-';
 
@@ -124,11 +129,11 @@ export default function WarehouseStock() {
                 <p className="text-slate-500">{selectedWarehouse.location || 'No location'}</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Visible Warehouse Stock</p>
-                <p className="text-xl font-bold text-brand-red">{totalWarehouseStock.toLocaleString()}</p>
+                <p className="text-sm text-slate-500">Total Products</p>
+                <p className="text-xl font-bold text-brand-red">{total.toLocaleString()}</p>
               </div>
             </div>
-            <form onSubmit={e => { e.preventDefault(); loadStock(); }} className="mt-5 flex gap-3">
+            <form onSubmit={e => { e.preventDefault(); loadStock(1); }} className="mt-5 flex gap-3">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product name, part no, brand, category or type" className="w-full rounded-xl border py-3 pl-9 pr-3" />
@@ -155,7 +160,7 @@ export default function WarehouseStock() {
               <tbody>
                 {stockRows.map((row, index) => (
                   <tr key={row.product._id} className="border-t">
-                    <td className="p-4 font-semibold text-slate-500">{index + 1}</td>
+                    <td className="p-4 font-semibold text-slate-500">{(page - 1) * limit + index + 1}</td>
                     <td className="p-4 font-semibold">{productName(row.product)}</td>
                     <td className="p-4 text-slate-500">{partNo(row.product)}</td>
                     <td className="p-4 text-slate-500">{row.product.brand || '-'}</td>
@@ -175,6 +180,20 @@ export default function WarehouseStock() {
             </table>}
             {!loadingStock && stockRows.length === 0 && <div className="p-8 text-center text-slate-500">No products found.</div>}
           </div>
+          {totalPages > 1 && <div className="flex flex-wrap items-center justify-center gap-3 border-t p-5">
+            <button onClick={() => loadStock(page - 1)} disabled={page === 1 || loadingStock} className="flex items-center gap-1 rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button>
+            <div className="flex items-center gap-2">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pageNum = page <= 3 ? i + 1 : page - 2 + i;
+                return pageNum > 0 && pageNum <= totalPages ? (
+                  <button key={pageNum} onClick={() => loadStock(pageNum)} disabled={loadingStock} className={`rounded-lg px-3 py-2 font-medium disabled:opacity-60 ${page === pageNum ? 'bg-brand-dark text-white' : 'border hover:bg-slate-100'}`}>{pageNum}</button>
+                ) : null;
+              })}
+              {totalPages > 5 && <span className="text-slate-500">...</span>}
+            </div>
+            <span className="text-sm text-slate-600">Page {page} of {totalPages}</span>
+            <button onClick={() => loadStock(page + 1)} disabled={page === totalPages || loadingStock} className="flex items-center gap-1 rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button>
+          </div>}
         </>}
       </section>
     </div>
