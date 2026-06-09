@@ -16,12 +16,26 @@ import warehouseRoutes from './routes/warehouseRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
-const configuredClientUrl = process.env.CLIENT_URL || process.env.VERCEL_URL || 'http://localhost:5173';
-const clientOrigin = configuredClientUrl.replace(/\/+$/, '');
-const localTwinOrigin = clientOrigin.includes('localhost')
-  ? clientOrigin.replace('localhost', '127.0.0.1')
-  : clientOrigin.replace('127.0.0.1', 'localhost');
-const allowedOrigins = [...new Set([clientOrigin, localTwinOrigin])];
+
+function normalizeOrigin(url) {
+  if (!url) return '';
+  const trimmed = String(url).trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+const configuredClientUrls = [
+  ...(process.env.CLIENT_URL || '').split(','),
+  process.env.VERCEL_URL,
+  'http://localhost:5173'
+];
+const configuredOrigins = configuredClientUrls.map(normalizeOrigin).filter(Boolean);
+const localTwinOrigins = configuredOrigins.map(origin =>
+  origin.includes('localhost')
+    ? origin.replace('localhost', '127.0.0.1')
+    : origin.replace('127.0.0.1', 'localhost')
+);
+const allowedOrigins = [...new Set([...configuredOrigins, ...localTwinOrigins])];
 const corsOptions = {
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
