@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Filter, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -12,6 +12,8 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState([]);
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState(null);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
+  const [selectedProductAction, setSelectedProductAction] = useState(0);
   const [editing, setEditing] = useState(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -19,7 +21,6 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState('inventory');
   const [returns, setReturns] = useState([]);
   const [showAddProduct, setShowAddProduct] = useState(false);
-  const [inStockOnly, setInStockOnly] = useState(false);
   const [hasExactMatch, setHasExactMatch] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingReturns, setLoadingReturns] = useState(false);
@@ -31,8 +32,10 @@ export default function AdminDashboard() {
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
       setProducts(r.data.items);
+      setSelectedProductIndex(r.data.items?.length ? 0 : -1);
+      setSelectedProductAction(0);
       setTotal(r.data.total || 0);
       setPage(pageNum);
       
@@ -91,7 +94,7 @@ export default function AdminDashboard() {
     }
   }
 
-  useEffect(() => { load(1); }, [q, inStockOnly]);
+  useEffect(() => { load(1); }, [q]);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
     s.on('inventory:update', () => load(page));
@@ -103,6 +106,56 @@ export default function AdminDashboard() {
       loadReturns();
     }
   }, [tab]);
+  useEffect(() => {
+    function isTypingTarget(target) {
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.isContentEditable;
+    }
+
+    function handleGlobalKeyDown(e) {
+      if (tab !== 'inventory' || loadingProducts || selected || editing || showAddProduct || isTypingTarget(e.target)) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveProductSelection(1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveProductSelection(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        moveProductAction(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        moveProductAction(-1);
+      } else if (e.key === 'Enter') {
+        const product = products[selectedProductIndex];
+        if (product) {
+          e.preventDefault();
+          activateProductAction(product);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [tab, loadingProducts, selected, editing, showAddProduct, products, selectedProductIndex, selectedProductAction]);
+
+  function moveProductSelection(delta) {
+    setSelectedProductIndex(current => {
+      if (!products.length) return -1;
+      setSelectedProductAction(0);
+      return Math.min(products.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta));
+    });
+  }
+
+  function moveProductAction(delta) {
+    setSelectedProductAction(current => Math.min(2, Math.max(0, current + delta)));
+  }
+
+  function activateProductAction(product) {
+    if (!product) return;
+    if (selectedProductAction === 0) setSelected(product);
+    else if (selectedProductAction === 1) setEditing(product);
+    else if (selectedProductAction === 2) deleteProduct(product);
+  }
 
   async function saveEdit(e) {
     e.preventDefault();
@@ -155,15 +208,26 @@ export default function AdminDashboard() {
           {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
         </div>
         <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
-        <button onClick={() => setInStockOnly(value => !value)} className={`rounded-2xl border px-5 flex items-center gap-2 font-medium ${inStockOnly ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'hover:bg-slate-50'}`}>
-          <Filter size={18}/>{inStockOnly ? 'In Stock' : 'All Stock'}
-        </button>
         <button onClick={() => setShowAddProduct(true)} className="rounded-2xl bg-brand-red text-white px-6 flex items-center gap-2"><Plus size={18}/>Add Product</button>
       </div>
-      {inStockOnly && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Showing products with quantity greater than 0.</div>}
       {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match found for "{q}", but showing relevant results:</div>}
       {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
-      {loadingProducts ? <LoadingState label={deletingProductId ? 'Deleting product...' : 'Loading products...'} /> : <ProductTable products={products} onDetail={setSelected} onEdit={setEditing} onDelete={deleteProduct} startIndex={(page - 1) * limit} />}
+      {loadingProducts ? <LoadingState label={deletingProductId ? 'Deleting product...' : 'Loading products...'} /> : <ProductTable
+        products={products}
+        selectedIndex={selectedProductIndex}
+        selectedActionIndex={selectedProductAction}
+        onSelectIndex={index => {
+          setSelectedProductIndex(index);
+          setSelectedProductAction(0);
+        }}
+        onMoveSelection={moveProductSelection}
+        onMoveAction={moveProductAction}
+        onActivateAction={activateProductAction}
+        onDetail={setSelected}
+        onEdit={setEditing}
+        onDelete={deleteProduct}
+        startIndex={(page - 1) * limit}
+      />}
       
       {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
         <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>

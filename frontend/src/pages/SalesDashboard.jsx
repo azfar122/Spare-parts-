@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Filter, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -18,7 +18,6 @@ export default function SalesDashboard() {
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const [selectedCart, setSelectedCart] = useState({ row: -1, field: 'qty' });
   const [receipt, setReceipt] = useState(null);
-  const [inStockOnly, setInStockOnly] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [warehouseOptions, setWarehouseOptions] = useState({});
@@ -47,7 +46,7 @@ export default function SalesDashboard() {
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum, inStock: inStockOnly ? 'true' : undefined, includeWarehouseStock: 'true' } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum, includeWarehouseStock: 'true' } });
       setProducts(r.data.items);
       setSelectedProductIndex(r.data.items?.length ? 0 : -1);
       setTotal(r.data.total || 0);
@@ -79,7 +78,7 @@ export default function SalesDashboard() {
     setWarehouses(r.data || []);
   }
 
-  useEffect(() => { load(1); }, [q, inStockOnly]);
+  useEffect(() => { load(1); }, [q]);
   useEffect(() => { loadCustomers(''); }, []);
   useEffect(() => { loadWarehouses(); }, []);
   useEffect(() => {
@@ -91,6 +90,31 @@ export default function SalesDashboard() {
     });
     return () => s.disconnect();
   }, [page]);
+  useEffect(() => {
+    function isTypingTarget(target) {
+      return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || target?.isContentEditable;
+    }
+
+    function handleGlobalKeyDown(e) {
+      if (loadingProducts || receipt || returnForm || isTypingTarget(e.target)) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveProductSelection(1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveProductSelection(-1);
+      } else if (e.key === 'Enter') {
+        const product = products[selectedProductIndex];
+        if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) {
+          e.preventDefault();
+          addSale(product);
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [loadingProducts, receipt, returnForm, products, selectedProductIndex]);
 
   async function loadWarehouseOptions(productId) {
     if (warehouseOptions[productId]) return;
@@ -155,6 +179,10 @@ export default function SalesDashboard() {
 
   function addSelectedProduct() {
     const product = products[selectedProductIndex];
+    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
+  }
+
+  function activateProductAction(product) {
     if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
   }
 
@@ -349,20 +377,19 @@ export default function SalesDashboard() {
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
           </div>
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
-          <button onClick={() => setInStockOnly(value => !value)} className={`rounded-2xl border px-5 flex items-center gap-2 font-medium ${inStockOnly ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'hover:bg-slate-50'}`}>
-            <Filter size={18}/>{inStockOnly ? 'In Stock' : 'All Stock'}
-          </button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
         </div>
-        {inStockOnly && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Showing products with quantity greater than 0.</div>}
         {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
         {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
         {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable
           products={products}
           salesMode
           selectedIndex={selectedProductIndex}
+          selectedActionIndex={0}
           onSelectIndex={setSelectedProductIndex}
           onMoveSelection={moveProductSelection}
+          onMoveAction={() => {}}
+          onActivateAction={activateProductAction}
           onAddSale={addSale}
           onDetail={()=>{}}
           startIndex={(page - 1) * limit}

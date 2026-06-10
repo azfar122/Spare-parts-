@@ -12,6 +12,61 @@ import { productLabel, productPrice, productStock, productStockSet, serializePro
 const router = express.Router();
 router.use(requireAuth);
 
+async function attachReturnSummaries(sales) {
+  const saleObjects = sales.map(sale => typeof sale.toObject === 'function' ? sale.toObject() : sale);
+  const saleIds = saleObjects.map(sale => sale._id);
+  if (!saleIds.length) return saleObjects;
+
+  const returnRows = await Return.aggregate([
+    { $match: { sale: { $in: saleIds } } },
+    {
+      $group: {
+        _id: { sale: '$sale', product: '$product' },
+        returnedQty: { $sum: '$qty' },
+        refunded: { $sum: '$amountRefunded' }
+      }
+    }
+  ]);
+
+  const returnsBySaleProduct = new Map();
+  for (const row of returnRows) {
+    returnsBySaleProduct.set(`${row._id.sale}:${row._id.product}`, row);
+  }
+
+  return saleObjects.map(sale => {
+    let returnedQty = 0;
+    let returnedAmount = 0;
+    const items = (sale.items || []).map(item => {
+      const previousReturn = returnsBySaleProduct.get(`${sale._id}:${item.product}`);
+      const itemReturnedQty = previousReturn?.returnedQty || 0;
+      const itemRefunded = previousReturn?.refunded || 0;
+      const lineTotal = Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0)));
+      returnedQty += itemReturnedQty;
+      returnedAmount += itemRefunded;
+      return {
+        ...item,
+        returnedQty: itemReturnedQty,
+        refunded: itemRefunded,
+        returnableQty: Math.max(0, Number(item.qty || 0) - itemReturnedQty),
+        netQty: Math.max(0, Number(item.qty || 0) - itemReturnedQty),
+        netLineTotal: Math.max(0, lineTotal - itemRefunded)
+      };
+    });
+    const soldQty = items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    const netTotal = Math.max(0, Number(sale.grandTotal || 0) - returnedAmount);
+    const returnStatus = returnedQty <= 0 ? 'none' : returnedQty >= soldQty ? 'returned' : 'partial';
+
+    return {
+      ...sale,
+      items,
+      returnedQty,
+      returnedAmount,
+      netTotal,
+      returnStatus
+    };
+  });
+}
+
 router.get('/', requireRole('admin'), async (req, res) => {
   const { startDate, endDate, productCode, productName, page = 1, limit = 50 } = req.query;
   const filter = {};
@@ -39,6 +94,7 @@ router.get('/', requireRole('admin'), async (req, res) => {
     Sale.countDocuments(filter)
   ]);
 
+  const salesWithReturns = await attachReturnSummaries(sales);
   const codePattern = productCode ? new RegExp(productCode, 'i') : null;
   const namePattern = productName ? new RegExp(productName, 'i') : null;
   const summarizeMatchedItems = saleItems => {
@@ -50,31 +106,31 @@ router.get('/', requireRole('admin'), async (req, res) => {
 
     return {
       matchedItems,
-      matchedQty: matchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
-      matchedAmount: matchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0)
+      matchedQty: matchedItems.reduce((sum, item) => sum + Number(item.netQty ?? item.qty ?? 0), 0),
+      matchedAmount: matchedItems.reduce((sum, item) => sum + Number(item.netLineTotal ?? item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0)
     };
   };
 
   const items = productSearchActive
-    ? sales.map(sale => {
-      const saleObject = sale.toObject();
+    ? salesWithReturns.map(saleObject => {
       const matched = summarizeMatchedItems(saleObject.items);
       return {
         ...saleObject,
         ...matched
       };
     })
-    : sales;
+    : salesWithReturns;
 
   let matchedSummary = null;
   if (productSearchActive) {
     const allMatchingSales = await Sale.find(filter).select('items').lean();
-    const allMatchedItems = allMatchingSales.flatMap(sale => summarizeMatchedItems(sale.items || []).matchedItems);
+    const allMatchingSalesWithReturns = await attachReturnSummaries(allMatchingSales);
+    const allMatchedItems = allMatchingSalesWithReturns.flatMap(sale => summarizeMatchedItems(sale.items || []).matchedItems);
     const productNames = [...new Set(allMatchedItems.map(item => item.partName).filter(Boolean))];
     matchedSummary = {
       productNames,
-      qty: allMatchedItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
-      amount: allMatchedItems.reduce((sum, item) => sum + Number(item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0),
+      qty: allMatchedItems.reduce((sum, item) => sum + Number(item.netQty ?? item.qty ?? 0), 0),
+      amount: allMatchedItems.reduce((sum, item) => sum + Number(item.netLineTotal ?? item.lineTotal ?? (Number(item.price || 0) * Number(item.qty || 0) - Number(item.discount || 0))), 0),
       bills: allMatchingSales.length
     };
   }
@@ -92,23 +148,7 @@ router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, 
       .populate('soldBy', 'name email');
     if (!sale) return res.status(404).json({ message: 'Bill not found' });
 
-    const returns = await Return.aggregate([
-      { $match: { sale: sale._id } },
-      { $group: { _id: '$product', returnedQty: { $sum: '$qty' }, refunded: { $sum: '$amountRefunded' } } }
-    ]);
-    const returnedByProduct = new Map(returns.map(item => [String(item._id), item]));
-    const saleObject = sale.toObject();
-
-    saleObject.items = saleObject.items.map(item => {
-      const previousReturn = returnedByProduct.get(String(item.product));
-      const returnedQty = previousReturn?.returnedQty || 0;
-      return {
-        ...item,
-        returnedQty,
-        refunded: previousReturn?.refunded || 0,
-        returnableQty: Math.max(0, Number(item.qty || 0) - returnedQty)
-      };
-    });
+    const [saleObject] = await attachReturnSummaries([sale]);
 
     res.json(saleObject);
   } catch (err) {

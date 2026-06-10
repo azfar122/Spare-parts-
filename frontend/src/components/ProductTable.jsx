@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Eye, Pencil, Trash2 } from 'lucide-react';
 
-export default function ProductTable({ products, onDetail, onEdit, onDelete, salesMode, onAddSale, selectedIndex = -1, onSelectIndex, onMoveSelection, startIndex = 0, warehouseColumns = [] }) {
+export default function ProductTable({ products, onDetail, onEdit, onDelete, salesMode, onAddSale, selectedIndex = -1, selectedActionIndex = 0, onSelectIndex, onMoveSelection, onMoveAction, onActivateAction, startIndex = 0, warehouseColumns = [] }) {
   const rowRefs = useRef([]);
   const productName = product => product.productName || product.partName || '-';
   const partNo = product => product.partNo || product.partCode || '-';
@@ -14,20 +14,28 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
     if (selectedIndex >= 0) rowRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
 
+  function actionButtonClass(rowIndex, actionIndex, baseClass) {
+    return `${baseClass} ${selectedIndex === rowIndex && selectedActionIndex === actionIndex ? 'ring-2 ring-brand-red ring-offset-2' : ''}`;
+  }
+
   function handleRowKeyDown(e, product, index) {
-    if (!salesMode) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       onMoveSelection?.(1);
-    }
-    if (e.key === 'ArrowUp') {
+    } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       onMoveSelection?.(-1);
-    }
-    const selectedProduct = products[selectedIndex] || product;
-    if (e.key === 'Enter' && Number(selectedProduct.quantity || 0) + Number(selectedProduct.warehouseQuantity || 0) > 0) {
+    } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      onAddSale?.(selectedProduct);
+      onSelectIndex?.(selectedIndex >= 0 ? selectedIndex : index);
+      onMoveAction?.(1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onSelectIndex?.(selectedIndex >= 0 ? selectedIndex : index);
+      onMoveAction?.(-1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onActivateAction?.(products[selectedIndex] || product);
       onSelectIndex?.(selectedIndex >= 0 ? selectedIndex : index);
     }
   }
@@ -51,7 +59,15 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
           </thead>
           <tbody>
             {products.map((p, index) => (
-              <tr key={p._id} className="border-t hover:bg-slate-50/70">
+              <tr
+                key={p._id}
+                ref={node => { rowRefs.current[index] = node; }}
+                tabIndex={0}
+                aria-selected={selectedIndex === index}
+                onClick={() => onSelectIndex?.(index)}
+                onKeyDown={e => handleRowKeyDown(e, p, index)}
+                className={`border-t outline-none hover:bg-slate-50/70 ${selectedIndex === index ? 'bg-red-50 ring-2 ring-inset ring-brand-red/40' : ''}`}
+              >
                 <td className="p-4 font-semibold text-slate-500">{startIndex + index + 1}</td>
                 <td className="p-4 font-semibold">{productName(p)}</td>
                 <td className="p-4 text-slate-600">{partNo(p)}</td>
@@ -62,9 +78,9 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 <td className="p-4 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
-                    <button title="View details" className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onDetail(p)}><Eye size={16}/></button>
-                    {onEdit && <button title="Edit product" className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onEdit(p)}><Pencil size={16}/></button>}
-                    {onDelete && <button title="Delete product" className="rounded-xl border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50" onClick={() => onDelete(p)}><Trash2 size={16}/></button>}
+                    <button title="View details" className={actionButtonClass(index, 0, 'rounded-xl border px-3 py-2 hover:bg-slate-100')} onClick={() => onDetail(p)}><Eye size={16}/></button>
+                    {onEdit && <button title="Edit product" className={actionButtonClass(index, 1, 'rounded-xl border px-3 py-2 hover:bg-slate-100')} onClick={() => onEdit(p)}><Pencil size={16}/></button>}
+                    {onDelete && <button title="Delete product" className={actionButtonClass(index, onEdit ? 2 : 1, 'rounded-xl border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50')} onClick={() => onDelete(p)}><Trash2 size={16}/></button>}
                   </div>
                 </td>
               </tr>
@@ -100,11 +116,11 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
             return <tr
               key={p._id}
               ref={node => { rowRefs.current[index] = node; }}
-              tabIndex={salesMode ? 0 : undefined}
-              aria-selected={salesMode ? selectedIndex === index : undefined}
+              tabIndex={0}
+              aria-selected={selectedIndex === index}
               onClick={() => onSelectIndex?.(index)}
               onKeyDown={e => handleRowKeyDown(e, p, index)}
-              className={`border-t outline-none hover:bg-slate-50/70 ${salesMode && selectedIndex === index ? 'bg-red-50 ring-2 ring-inset ring-brand-red/40' : ''}`}
+              className={`border-t outline-none hover:bg-slate-50/70 ${selectedIndex === index ? 'bg-red-50 ring-2 ring-inset ring-brand-red/40' : ''}`}
             >
               <td className="p-3 font-semibold text-slate-500">{startIndex + index + 1}</td>
               <td className="p-3 font-semibold break-words">{productName(p)}</td>
@@ -120,7 +136,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <td className="p-3"><div className="flex justify-end gap-2">
                 {!salesMode && <button title="View details" className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onDetail(p)}><Eye size={16}/></button>}
                 {onEdit && <button className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onEdit(p)}><Pencil size={16}/></button>}
-                {salesMode && <button disabled={availableQty <= 0} className="rounded-xl bg-brand-red px-3 py-2 text-white disabled:opacity-40" onClick={() => onAddSale(p)}>Sell</button>}
+                {salesMode && <button disabled={availableQty <= 0} className={actionButtonClass(index, 0, 'rounded-xl bg-brand-red px-3 py-2 text-white disabled:opacity-40')} onClick={() => onAddSale(p)}>Sell</button>}
               </div></td>
             </tr>;
           })}

@@ -108,6 +108,18 @@ export default function SalesAnalytics() {
     return matchedSummary?.productNames?.length ? matchedSummary.productNames.join(', ') : productName || productCode || '-';
   }
 
+  function returnStatusLabel(status) {
+    if (status === 'returned') return 'Returned';
+    if (status === 'partial') return 'Partially Returned';
+    return 'No Return';
+  }
+
+  function returnStatusClass(status) {
+    if (status === 'returned') return 'border-red-200 bg-red-50 text-red-700';
+    if (status === 'partial') return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-slate-200 bg-slate-50 text-slate-600';
+  }
+
   const totalPages = Math.ceil(total / limit);
 
   return <Layout title="Sales Analytics" subtitle="View and search all sales transactions by date and product.">
@@ -169,11 +181,11 @@ export default function SalesAnalytics() {
         <p className="mt-2 text-lg font-bold text-slate-900">{summaryProductNames()}</p>
       </div>
       <div className="rounded-2xl border bg-white p-5 shadow-soft">
-        <p className="text-sm font-medium text-slate-500">Total Sold Qty</p>
+        <p className="text-sm font-medium text-slate-500">Net Sold Qty</p>
         <p className="mt-2 text-3xl font-bold text-brand-red">{Number(matchedSummary.qty || 0).toLocaleString()}</p>
       </div>
       <div className="rounded-2xl border bg-white p-5 shadow-soft">
-        <p className="text-sm font-medium text-slate-500">Total Product Amount</p>
+        <p className="text-sm font-medium text-slate-500">Net Product Amount</p>
         <p className="mt-2 text-3xl font-bold text-slate-900">Rs {Number(matchedSummary.amount || 0).toLocaleString()}</p>
         <p className="mt-1 text-xs text-slate-500">Across {Number(matchedSummary.bills || 0).toLocaleString()} bill(s)</p>
       </div>
@@ -188,11 +200,14 @@ export default function SalesAnalytics() {
             <th className="p-4 text-left">Customer</th>
             <th className="p-4 text-right">Items</th>
             {productSearchActive && <th className="p-4 text-left">Product Name</th>}
-            {productSearchActive && <th className="p-4 text-right">Matched Qty</th>}
-            {productSearchActive && <th className="p-4 text-right">Matched Amount</th>}
+            {productSearchActive && <th className="p-4 text-right">Net Qty</th>}
+            {productSearchActive && <th className="p-4 text-right">Net Amount</th>}
+            <th className="p-4 text-left">Return Status</th>
             <th className="p-4 text-right">Bill Subtotal</th>
             <th className="p-4 text-right">Discount</th>
+            <th className="p-4 text-right">Returned</th>
             <th className="p-4 text-right">Bill Total</th>
+            <th className="p-4 text-right">Net Total</th>
             <th className="p-4 text-center">Action</th>
           </tr>
         </thead>
@@ -206,9 +221,16 @@ export default function SalesAnalytics() {
               {productSearchActive && <td className="p-4 font-semibold">{matchedProductNames(sale)}</td>}
               {productSearchActive && <td className="p-4 text-right font-semibold">{Number(sale.matchedQty || 0).toLocaleString()}</td>}
               {productSearchActive && <td className="p-4 text-right font-semibold">Rs {Number(sale.matchedAmount || 0).toLocaleString()}</td>}
+              <td className="p-4">
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${returnStatusClass(sale.returnStatus)}`}>
+                  {returnStatusLabel(sale.returnStatus)}
+                </span>
+              </td>
               <td className="p-4 text-right">Rs {Number(sale.subtotal).toLocaleString()}</td>
               <td className="p-4 text-right">Rs {Number(sale.discountTotal).toLocaleString()}</td>
+              <td className="p-4 text-right text-red-600">Rs {Number(sale.returnedAmount || 0).toLocaleString()}</td>
               <td className="p-4 text-right font-bold">Rs {Number(sale.grandTotal).toLocaleString()}</td>
+              <td className="p-4 text-right font-bold text-brand-red">Rs {Number(sale.netTotal ?? sale.grandTotal ?? 0).toLocaleString()}</td>
               <td className="p-4 text-center"><button onClick={() => setSelectedSale(sale)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td>
             </tr>
           ))}
@@ -237,20 +259,30 @@ export default function SalesAnalytics() {
         <div className="grid grid-cols-2 gap-2">
           <div><p className="text-slate-500">Date</p><p className="font-semibold">{new Date(selectedSale.createdAt).toLocaleString('en-IN')}</p></div>
           <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selectedSale.customerName}</p></div>
+          <div>
+            <p className="text-slate-500">Return Status</p>
+            <p><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${returnStatusClass(selectedSale.returnStatus)}`}>{returnStatusLabel(selectedSale.returnStatus)}</span></p>
+          </div>
+          <div><p className="text-slate-500">Returned Amount</p><p className="font-semibold text-red-600">Rs {Number(selectedSale.returnedAmount || 0).toLocaleString()}</p></div>
         </div>
         <div className="border-t pt-4">
           <p className="font-semibold mb-2">Items Sold</p>
           <div className="space-y-2">
             {selectedSale.items.map((item, idx) => (
               <div key={idx} className={`p-3 rounded-lg ${selectedSale.matchedItems?.some(matched => String(matched.product) === String(item.product)) ? 'bg-red-50 ring-1 ring-brand-red/20' : 'bg-slate-50'}`}>
-                <div className="flex justify-between"><span className="font-semibold">{item.partName}</span><span>{item.qty}x</span></div>
+                <div className="flex justify-between"><span className="font-semibold">{item.partName}</span><span>Net {Number(item.netQty ?? item.qty).toLocaleString()}x</span></div>
                 <div className="text-xs text-slate-500">{item.partCode} · {item.model}</div>
+                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">
+                  <span>Sold: <b>{Number(item.qty || 0).toLocaleString()}</b></span>
+                  <span>Returned: <b>{Number(item.returnedQty || 0).toLocaleString()}</b></span>
+                  <span>Refunded: <b>Rs {Number(item.refunded || 0).toLocaleString()}</b></span>
+                </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">
                   <span>Main used: <b>{Number(item.inventoryQtyUsed ?? item.qty)}</b></span>
                   <span>Warehouse used: <b>{Number(item.warehouseQtyUsed || 0)}</b></span>
                   <span>Warehouse: <b>{item.warehouseName || '-'}</b></span>
                 </div>
-                <div className="flex justify-between text-xs mt-2"><span>Rs {Number(item.price).toLocaleString()}</span><span className="font-semibold">Rs {Number(item.lineTotal).toLocaleString()}</span></div>
+                <div className="flex justify-between text-xs mt-2"><span>Rs {Number(item.price).toLocaleString()}</span><span className="font-semibold">Net Rs {Number(item.netLineTotal ?? item.lineTotal ?? 0).toLocaleString()}</span></div>
               </div>
             ))}
           </div>
@@ -258,7 +290,9 @@ export default function SalesAnalytics() {
         <div className="border-t pt-4 space-y-1">
           <div className="flex justify-between"><span>Subtotal</span><span>Rs {Number(selectedSale.subtotal).toLocaleString()}</span></div>
           <div className="flex justify-between"><span>Discount</span><span>-Rs {Number(selectedSale.discountTotal).toLocaleString()}</span></div>
-          <div className="flex justify-between text-lg font-bold text-brand-red"><span>Total</span><span>Rs {Number(selectedSale.grandTotal).toLocaleString()}</span></div>
+          <div className="flex justify-between"><span>Returned</span><span className="text-red-600">-Rs {Number(selectedSale.returnedAmount || 0).toLocaleString()}</span></div>
+          <div className="flex justify-between"><span>Original Total</span><span>Rs {Number(selectedSale.grandTotal).toLocaleString()}</span></div>
+          <div className="flex justify-between text-lg font-bold text-brand-red"><span>Net Total</span><span>Rs {Number(selectedSale.netTotal ?? selectedSale.grandTotal ?? 0).toLocaleString()}</span></div>
         </div>
         <button type="button" onClick={() => window.print()} className="no-print w-full rounded-xl bg-brand-dark text-white py-3 font-semibold inline-flex items-center justify-center gap-2">
           <Printer size={18} />
