@@ -9,6 +9,7 @@ import { api } from '../api/client.js';
 export default function PurchaseOrders() {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [showForm, setShowForm] = useState(false);
@@ -51,9 +52,15 @@ export default function PurchaseOrders() {
     }
   }
 
+  async function loadWarehouses() {
+    const r = await api.get('/warehouses');
+    setWarehouses(r.data || []);
+  }
+
   useEffect(() => {
     loadOrders(1);
     loadProducts();
+    loadWarehouses();
   }, []);
 
   async function handleSubmit(e) {
@@ -95,7 +102,9 @@ export default function PurchaseOrders() {
       
       const updated = await api.put(`/purchase-orders/${order._id}/receive`, {
         itemIndex: itemIdx,
-        receivedQty
+        receivedQty,
+        stockDestination: receiveForm.stockDestination,
+        warehouseId: receiveForm.stockDestination === 'warehouse' ? receiveForm.warehouseId : undefined
       });
       
       setSelectedOrder(updated.data);
@@ -270,7 +279,7 @@ export default function PurchaseOrders() {
                 <span>Received: {item.received}</span>
               </div>
               {item.price && <div className="mb-2 text-slate-600"><span>Price: Rs {Number(item.price).toLocaleString()}</span></div>}
-              {item.status !== 'received' && <button onClick={() => setReceiveForm({itemIndex: idx, receivedQty: item.qty})} className="w-full rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-bold flex items-center justify-center gap-1"><Check size={14}/>Mark as Received</button>}
+              {item.status !== 'received' && <button onClick={() => setReceiveForm({ itemIndex: idx, receivedQty: item.qty, stockDestination: 'shop', warehouseId: '' })} className="w-full rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-bold flex items-center justify-center gap-1"><Check size={14}/>Mark as Received</button>}
             </div>
           ))}
         </div>
@@ -280,9 +289,28 @@ export default function PurchaseOrders() {
     {receiveForm && <Modal title="Receive Items" onClose={() => setReceiveForm(null)}>
       <form onSubmit={handleReceive} className="space-y-4">
         <div>
-          <label className="text-sm font-medium">Quantity Received</label>
-          <input type="number" min="0" value={receiveForm.receivedQty} onChange={e => setReceiveForm({...receiveForm, receivedQty: e.target.value})} className="mt-2 w-full rounded-xl border p-3" />
+          <label className="text-sm font-medium">Total Quantity Received</label>
+          <input type="number" min="0" max={selectedOrder?.items?.[receiveForm.itemIndex]?.qty || undefined} value={receiveForm.receivedQty} onChange={e => setReceiveForm({...receiveForm, receivedQty: e.target.value})} className="mt-2 w-full rounded-xl border p-3" />
+          {Number(selectedOrder?.items?.[receiveForm.itemIndex]?.received || 0) > 0 && <p className="mt-2 text-xs text-slate-500">Already received: {selectedOrder.items[receiveForm.itemIndex].received}. Only the newly received difference will be added to stock.</p>}
         </div>
+        <div>
+          <label className="text-sm font-medium">Add Stock To</label>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setReceiveForm({...receiveForm, stockDestination: 'shop', warehouseId: ''})} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${receiveForm.stockDestination === 'shop' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Shop Inventory</button>
+            <button type="button" onClick={() => setReceiveForm({...receiveForm, stockDestination: 'warehouse'})} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${receiveForm.stockDestination === 'warehouse' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Warehouse</button>
+          </div>
+        </div>
+        {receiveForm.stockDestination === 'warehouse' && <div>
+          <label className="text-sm font-medium">Warehouse</label>
+          <select required value={receiveForm.warehouseId || ''} onChange={e => setReceiveForm({...receiveForm, warehouseId: e.target.value})} className="mt-2 w-full rounded-xl border bg-white p-3">
+            <option value="">Select warehouse</option>
+            {warehouses.map(warehouse => (
+              <option key={warehouse._id} value={warehouse._id}>{warehouse.name}</option>
+            ))}
+          </select>
+          {warehouses.length === 0 && <p className="mt-2 text-xs text-red-600">No active warehouses found. Add a warehouse before receiving into warehouse stock.</p>}
+        </div>
+        }
         <button type="submit" disabled={receivingItems} className="w-full rounded-xl bg-green-600 text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
           {receivingItems && <ButtonSpinner />}
           {receivingItems ? 'Confirming...' : 'Confirm Receipt'}
