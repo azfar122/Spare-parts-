@@ -3,11 +3,10 @@ import mongoose from 'mongoose';
 const purchaseOrderItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
   partName: String,
-  partCode: { type: String, required: true },
+  partCode: { type: String, trim: true, default: '' },
   brand: String,
   model: { type: String, default: 'COMMON' },
   qty: { type: Number, required: true, min: 1 },
-  price: { type: Number, min: 0 },
   received: { type: Number, default: 0, min: 0 },
   status: { type: String, enum: ['pending', 'received', 'partial'], default: 'pending' }
 }, { _id: false });

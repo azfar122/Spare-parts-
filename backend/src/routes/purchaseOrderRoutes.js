@@ -47,41 +47,50 @@ async function addWarehouseStock(productId, warehouseId, received, userId, optio
   }
 }
 
-async function findOrCreateProductForItem(item, initialMainStock = 0) {
+function temporaryPartCode(order, itemIndex) {
+  const orderToken = String(order.orderNumber || order._id || Date.now()).replace(/[^a-z0-9-]/gi, '').toUpperCase();
+  return `PO-${orderToken}-${Number(itemIndex) + 1}`;
+}
+
+async function findOrCreateProductForItem(item, initialMainStock = 0, fallbackPartCode = '') {
   if (item.product) return item.product;
 
-  const existingProduct = item.partCode ? await Product.findOne({
-    $or: [{ partCode: item.partCode }, { PartNo: item.partCode }, { 'Part No': item.partCode }]
-  }) : null;
+  const partCode = String(item.partCode || fallbackPartCode || '').trim();
+  if (!partCode) throw new Error('Part code is required before receiving this item into inventory');
+
+  const existingProduct = await Product.findOne({
+    $or: [{ partCode }, { PartNo: partCode }, { 'Part No': partCode }]
+  });
   if (existingProduct) {
     item.product = existingProduct._id;
     return existingProduct._id;
   }
 
   const newProduct = await Product.create({
-    partName: item.partName || `New Part - ${item.partCode}`,
-    partCode: item.partCode,
+    partName: item.partName || `New Part - ${partCode}`,
+    partCode,
     model: item.model || 'COMMON',
     brand: item.brand || '',
     type: item.model || 'COMMON',
     quantity: initialMainStock,
-    mrp: item.price || 0,
-    bookingPrice: item.price || 0
+    mrp: 0,
+    bookingPrice: 0
   });
   await Product.collection.updateOne(
     { _id: newProduct._id },
     { $set: {
-      'Product Name': item.partName || `New Part - ${item.partCode}`,
-      PartNo: item.partCode,
-      'Part No': item.partCode,
+      'Product Name': item.partName || `New Part - ${partCode}`,
+      PartNo: partCode,
+      'Part No': partCode,
       Brand: item.brand || '',
       Type: item.model || 'COMMON',
       'Stock Qty': initialMainStock,
-      CCP: item.price || 0,
-      CP: item.price || 0,
-      RP: item.price || 0
+      CCP: 0,
+      CP: 0,
+      RP: 0
     } }
   );
+  item.partCode = partCode;
   item.product = newProduct._id;
   return newProduct._id;
 }
@@ -109,13 +118,23 @@ router.post('/', async (req, res) => {
   try {
     const { orderNumber, totalPrice, items, notes } = req.body;
     if (!orderNumber || !totalPrice || !items?.length) {
-      return res.status(400).json({ message: 'Order number, price, and items are required' });
+      return res.status(400).json({ message: 'Order number, total price, and items are required' });
     }
+    const normalizedItems = items.map(item => ({
+      product: item.product || undefined,
+      partCode: String(item.partCode || '').trim(),
+      partName: String(item.partName || '').trim(),
+      brand: String(item.brand || '').trim(),
+      model: String(item.model || 'COMMON').trim() || 'COMMON',
+      qty: Number(item.qty || 0)
+    }));
+    const invalidItem = normalizedItems.find(item => !item.product && !item.partName);
+    if (invalidItem) return res.status(400).json({ message: 'Each item needs a product name or selected inventory product' });
     
     const order = await PurchaseOrder.create({
       orderNumber: String(orderNumber).trim(),
       totalPrice: Number(totalPrice),
-      items,
+      items: normalizedItems,
       notes,
       createdBy: req.user._id
     });
@@ -145,7 +164,7 @@ router.put('/:id/receive', async (req, res) => {
 
     const receivedDelta = nextReceived - previousReceived;
     if (receivedDelta > 0) {
-      const productId = await findOrCreateProductForItem(item, 0);
+      const productId = await findOrCreateProductForItem(item, 0, temporaryPartCode(order, itemIndex));
       if (stockDestination === 'warehouse') {
         await addWarehouseStock(productId, warehouseId, receivedDelta, req.user._id);
       } else {

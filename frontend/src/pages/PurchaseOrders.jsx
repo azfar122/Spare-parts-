@@ -25,7 +25,7 @@ export default function PurchaseOrders() {
   const [formData, setFormData] = useState({
     orderNumber: '',
     totalPrice: '',
-    items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }],
+    items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null }],
     notes: ''
   });
   const [searchQueries, setSearchQueries] = useState({});
@@ -76,12 +76,11 @@ export default function PurchaseOrders() {
           partName: item.partName,
           brand: item.brand || '',
           model: item.model || 'COMMON',
-          qty: Number(item.qty),
-          price: item.price ? Number(item.price) : undefined
+          qty: Number(item.qty)
         })),
         notes: formData.notes
       });
-      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null, price: '' }], notes: '' });
+      setFormData({ orderNumber: '', totalPrice: '', items: [{ partCode: '', partName: '', brand: '', qty: 1, productId: null }], notes: '' });
       setShowForm(false);
       await loadOrders(1);
       setNotice({ type: 'success', title: 'Order Created', message: 'Purchase order created successfully.' });
@@ -157,27 +156,13 @@ export default function PurchaseOrders() {
           {formData.items.map((item, idx) => {
             const sq = searchQueries[idx] || '';
             const filteredProducts = products.filter(p => 
-              p.partName.toLowerCase().includes(sq.toLowerCase()) || 
-              p.partCode.toLowerCase().includes(sq.toLowerCase())
+              (p.partName || '').toLowerCase().includes(sq.toLowerCase()) || 
+              (p.partCode || '').toLowerCase().includes(sq.toLowerCase())
             );
             const hasExactMatch = filteredProducts.some(p => 
-              p.partName.toUpperCase() === sq.toUpperCase() || 
-              p.partCode.toUpperCase() === sq.toUpperCase()
+              (p.partName || '').toUpperCase() === sq.toUpperCase() || 
+              (p.partCode || '').toUpperCase() === sq.toUpperCase()
             );
-            
-            const handlePriceUpdate = async (newPrice) => {
-              const newItems = [...formData.items];
-              newItems[idx].price = newPrice;
-              setFormData({...formData, items: newItems});
-              
-              if (item.productId) {
-                try {
-                  await api.put(`/products/${item.productId}`, { mrp: Number(newPrice) });
-                } catch (err) {
-                  console.error('Failed to update product MRP:', err);
-                }
-              }
-            };
             
             return <div key={idx} className="mt-3 p-4 bg-slate-50 rounded-xl space-y-4">
               <div>
@@ -201,7 +186,7 @@ export default function PurchaseOrders() {
                             key={p._id}
                             onClick={() => {
                               const newItems = [...formData.items];
-                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode, partName: p.partName, brand: p.brand || '', model: p.model || 'COMMON', price: p.mrp };
+                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode || '', partName: p.partName, brand: p.brand || '', model: p.model || 'COMMON' };
                               setFormData({...formData, items: newItems});
                               setSearchQueries({...searchQueries, [idx]: ''});
                             }}
@@ -218,14 +203,14 @@ export default function PurchaseOrders() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-700">Code</label>
+                  <label className="text-xs font-medium text-slate-700">Code (optional)</label>
                   <input value={item.partCode} onChange={e => { const newItems = [...formData.items]; newItems[idx].partCode = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="ABC-123" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Name</label>
-                  <input value={item.partName} onChange={e => { const newItems = [...formData.items]; newItems[idx].partName = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Part name" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                  <input required value={item.partName} onChange={e => { const newItems = [...formData.items]; newItems[idx].partName = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="Part name" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Brand</label>
@@ -235,17 +220,13 @@ export default function PurchaseOrders() {
                   <label className="text-xs font-medium text-slate-700">Qty</label>
                   <input type="number" min="1" value={item.qty} onChange={e => { const newItems = [...formData.items]; newItems[idx].qty = Number(e.target.value); setFormData({...formData, items: newItems}); }} placeholder="10" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-700">Price (Rs)</label>
-                  <input type="number" min="0" value={item.price} onChange={e => handlePriceUpdate(e.target.value)} placeholder="500" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
-                </div>
                 <div className="flex items-end">
                   {formData.items.length > 1 && <button type="button" onClick={() => setFormData({...formData, items: formData.items.filter((_, i) => i !== idx)})} className="w-full rounded-lg bg-red-100 hover:bg-red-200 text-red-700 px-2 py-2 text-sm font-bold h-10"><Trash2 size={16}/></button>}
                 </div>
               </div>
             </div>;
           })}
-          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', brand: '', qty: 1, productId: null, price: ''}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
+          <button type="button" onClick={() => setFormData({...formData, items: [...formData.items, {partCode: '', partName: '', brand: '', qty: 1, productId: null}]})} className="mt-3 text-sm rounded-lg border px-3 py-2 hover:bg-slate-100">+ Add Item</button>
         </div>
 
         <div><label className="text-sm font-medium">Notes</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Order notes" className="mt-1 w-full rounded-xl border p-3" /></div>
@@ -270,7 +251,7 @@ export default function PurchaseOrders() {
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <p className="font-semibold">{item.partName}</p>
-                  <p className="text-xs text-slate-500">{item.partCode} • {item.brand || item.model || '-'}</p>
+                  <p className="text-xs text-slate-500">{[item.partCode, item.brand || item.model || '-'].filter(Boolean).join(' • ')}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.status === 'received' ? 'bg-green-100 text-green-700' : item.status === 'partial' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
               </div>
@@ -278,7 +259,6 @@ export default function PurchaseOrders() {
                 <span>Ordered: {item.qty}</span>
                 <span>Received: {item.received}</span>
               </div>
-              {item.price && <div className="mb-2 text-slate-600"><span>Price: Rs {Number(item.price).toLocaleString()}</span></div>}
               {item.status !== 'received' && <button onClick={() => setReceiveForm({ itemIndex: idx, receivedQty: item.qty, stockDestination: 'shop', warehouseId: '' })} className="w-full rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-bold flex items-center justify-center gap-1"><Check size={14}/>Mark as Received</button>}
             </div>
           ))}
