@@ -68,9 +68,12 @@ async function attachReturnSummaries(sales) {
 }
 
 router.get('/', requireRole('admin'), async (req, res) => {
-  const { startDate, endDate, productCode, productName, page = 1, limit = 50 } = req.query;
+  const { startDate, endDate, productCode, productName, customerName, receiptNo, page = 1, limit = 50 } = req.query;
   const filter = {};
+  const conditions = [];
   const productSearchActive = Boolean(productCode || productName);
+
+  const escapeRegex = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   
   if (startDate || endDate) {
     filter.createdAt = {};
@@ -83,14 +86,19 @@ router.get('/', requireRole('admin'), async (req, res) => {
   }
 
   if (productCode || productName) {
-    filter.$or = [];
-    if (productCode) filter.$or.push({ 'items.partCode': new RegExp(productCode, 'i') });
-    if (productName) filter.$or.push({ 'items.partName': new RegExp(productName, 'i') });
+    const productConditions = [];
+    if (productCode) productConditions.push({ 'items.partCode': new RegExp(escapeRegex(productCode), 'i') });
+    if (productName) productConditions.push({ 'items.partName': new RegExp(escapeRegex(productName), 'i') });
+    conditions.push({ $or: productConditions });
   }
+
+  if (customerName) conditions.push({ customerName: new RegExp(escapeRegex(customerName), 'i') });
+  if (receiptNo) conditions.push({ receiptNo: new RegExp(escapeRegex(receiptNo), 'i') });
+  if (conditions.length) filter.$and = conditions;
 
   const skip = (Number(page) - 1) * Number(limit);
   const [sales, total] = await Promise.all([
-    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name email').populate('customer', 'name phone currentBalance'),
+    Sale.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).populate('soldBy', 'name username email').populate('customer', 'name phone currentBalance'),
     Sale.countDocuments(filter)
   ]);
 
@@ -145,7 +153,7 @@ router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, 
 
     const sale = await Sale.findOne({ receiptNo })
       .populate('customer', 'name phone currentBalance')
-      .populate('soldBy', 'name email');
+      .populate('soldBy', 'name username email');
     if (!sale) return res.status(404).json({ message: 'Bill not found' });
 
     const [saleObject] = await attachReturnSummaries([sale]);
@@ -275,7 +283,14 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
 
     await session.commitTransaction();
     req.app.get('io').emit('inventory:bulk-update');
-    res.status(201).json(sale);
+    res.status(201).json({
+      ...sale.toObject(),
+      soldBy: {
+        _id: req.user._id,
+        name: req.user.name,
+        username: req.user.username
+      }
+    });
   } catch (err) {
     await session.abortTransaction();
     res.status(400).json({ message: err.message });

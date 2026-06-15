@@ -41,6 +41,7 @@ export default function SalesDashboard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [returnSaving, setReturnSaving] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [showBookingPrice, setShowBookingPrice] = useState(false);
   const cartFieldRefs = useRef({});
 
   async function load(pageNum = 1) {
@@ -394,6 +395,8 @@ export default function SalesDashboard() {
           onDetail={()=>{}}
           startIndex={(page - 1) * limit}
           warehouseColumns={warehouses}
+          showBookingPrice={showBookingPrice}
+          onToggleBookingPrice={() => setShowBookingPrice(value => !value)}
         />}
         {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>

@@ -8,7 +8,7 @@ export function serializeProduct(product) {
   const legacyPrice = item?.bookingPrice ?? item?.['Customer price (cc)'] ?? item?.CCP ?? item?.CP ?? 0;
   const retailPrice = item?.mrp ?? item?.['Retail Price(RP)'] ?? item?.RP ?? 0;
   const mrp = Number(retailPrice || 0) > 0 ? retailPrice : legacyPrice;
-  const bookingPrice = mrp;
+  const bookingPrice = Number(legacyPrice || 0) > 0 ? legacyPrice : mrp;
   const quantity = item?.quantity ?? item?.['Stock Qty'] ?? 0;
 
   return {
