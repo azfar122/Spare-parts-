@@ -12,6 +12,21 @@ import { productLabel, productPrice, productStock, productStockSet, serializePro
 const router = express.Router();
 router.use(requireAuth);
 
+const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDateFilter(value, endOfDay = false) {
+  const dateValue = String(value || '').trim();
+  if (!dateValue) return null;
+
+  if (dateOnlyPattern.test(dateValue)) {
+    const [year, month, day] = dateValue.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0));
+  }
+
+  const parsed = new Date(dateValue);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 async function attachReturnSummaries(sales) {
   const saleObjects = sales.map(sale => typeof sale.toObject === 'function' ? sale.toObject() : sale);
   const saleIds = saleObjects.map(sale => sale._id);
@@ -68,7 +83,20 @@ async function attachReturnSummaries(sales) {
 }
 
 router.get('/', requireRole('admin'), async (req, res) => {
-  const { startDate, endDate, productCode, productName, customerName, receiptNo, page = 1, limit = 50 } = req.query;
+  const {
+    startDate,
+    endDate,
+    productCode: rawProductCode,
+    productName: rawProductName,
+    customerName: rawCustomerName,
+    receiptNo: rawReceiptNo,
+    page = 1,
+    limit = 50
+  } = req.query;
+  const productCode = String(rawProductCode || '').trim();
+  const productName = String(rawProductName || '').trim();
+  const customerName = String(rawCustomerName || '').trim();
+  const receiptNo = String(rawReceiptNo || '').trim();
   const filter = {};
   const conditions = [];
   const productSearchActive = Boolean(productCode || productName);
@@ -77,22 +105,30 @@ router.get('/', requireRole('admin'), async (req, res) => {
   
   if (startDate || endDate) {
     filter.createdAt = {};
-    if (startDate) filter.createdAt.$gte = new Date(startDate);
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      filter.createdAt.$lte = end;
-    }
+    const start = parseDateFilter(startDate);
+    const end = parseDateFilter(endDate || startDate, true);
+    if (start) filter.createdAt.$gte = start;
+    if (end) filter.createdAt.$lte = end;
+    if (!Object.keys(filter.createdAt).length) delete filter.createdAt;
   }
 
   if (productCode || productName) {
-    const productConditions = [];
-    if (productCode) productConditions.push({ 'items.partCode': new RegExp(escapeRegex(productCode), 'i') });
-    if (productName) productConditions.push({ 'items.partName': new RegExp(escapeRegex(productName), 'i') });
-    conditions.push({ $or: productConditions });
+    const productItemFilter = {};
+    if (productCode) productItemFilter.partCode = new RegExp(escapeRegex(productCode), 'i');
+    if (productName) productItemFilter.partName = new RegExp(escapeRegex(productName), 'i');
+    conditions.push({ items: { $elemMatch: productItemFilter } });
   }
 
-  if (customerName) conditions.push({ customerName: new RegExp(escapeRegex(customerName), 'i') });
+  if (customerName) {
+    const customerPattern = new RegExp(escapeRegex(customerName), 'i');
+    const matchingCustomers = await Customer.find({ name: customerPattern }).select('_id').lean();
+    conditions.push({
+      $or: [
+        { customerName: customerPattern },
+        { customer: { $in: matchingCustomers.map(customer => customer._id) } }
+      ]
+    });
+  }
   if (receiptNo) conditions.push({ receiptNo: new RegExp(escapeRegex(receiptNo), 'i') });
   if (conditions.length) filter.$and = conditions;
 
@@ -103,13 +139,13 @@ router.get('/', requireRole('admin'), async (req, res) => {
   ]);
 
   const salesWithReturns = await attachReturnSummaries(sales);
-  const codePattern = productCode ? new RegExp(productCode, 'i') : null;
-  const namePattern = productName ? new RegExp(productName, 'i') : null;
+  const codePattern = productCode ? new RegExp(escapeRegex(productCode), 'i') : null;
+  const namePattern = productName ? new RegExp(escapeRegex(productName), 'i') : null;
   const summarizeMatchedItems = saleItems => {
     const matchedItems = saleItems.filter(item => {
-      const codeMatches = codePattern && codePattern.test(item.partCode || '');
-      const nameMatches = namePattern && namePattern.test(item.partName || '');
-      return codeMatches || nameMatches;
+      const codeMatches = !codePattern || codePattern.test(item.partCode || '');
+      const nameMatches = !namePattern || namePattern.test(item.partName || '');
+      return codeMatches && nameMatches;
     });
 
     return {

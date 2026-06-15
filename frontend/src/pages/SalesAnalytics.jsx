@@ -41,25 +41,37 @@ export default function SalesAnalytics() {
     return Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim() || filters.customerName?.trim() || filters.receiptNo?.trim());
   }
 
+  function localDateBoundary(dateValue, endOfDay = false) {
+    if (!dateValue) return '';
+    const [year, month, day] = dateValue.split('-').map(Number);
+    if (!year || !month || !day) return '';
+    const date = new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    return date.toISOString();
+  }
+
   async function load(pageNum = 1, overrides = {}) {
     try {
       setLoading(true);
       setSearchPrompt('');
       const filters = buildFilters(overrides);
+      const trimmedProductCode = filters.productCode.trim();
+      const trimmedProductName = filters.productName.trim();
+      const trimmedCustomerName = filters.customerName.trim();
+      const trimmedReceiptNo = filters.receiptNo.trim();
 
       const params = { page: pageNum, limit };
-      if (filters.startDate) params.startDate = filters.startDate;
-      if (filters.endDate) params.endDate = filters.endDate;
-      if (filters.productCode) params.productCode = filters.productCode;
-      if (filters.productName) params.productName = filters.productName;
-      if (filters.customerName) params.customerName = filters.customerName;
-      if (filters.receiptNo) params.receiptNo = filters.receiptNo;
+      if (filters.startDate) params.startDate = localDateBoundary(filters.startDate);
+      if (filters.endDate || filters.startDate) params.endDate = localDateBoundary(filters.endDate || filters.startDate, true);
+      if (trimmedProductCode) params.productCode = trimmedProductCode;
+      if (trimmedProductName) params.productName = trimmedProductName;
+      if (trimmedCustomerName) params.customerName = trimmedCustomerName;
+      if (trimmedReceiptNo) params.receiptNo = trimmedReceiptNo;
 
       const r = await api.get('/sales', { params });
       setSales(r.data.items);
       setTotal(r.data.total || 0);
       setPage(pageNum);
-      setProductSearchActive(Boolean(filters.productCode?.trim() || filters.productName?.trim()));
+      setProductSearchActive(Boolean(trimmedProductCode || trimmedProductName));
       setMatchedSummary(r.data.matchedSummary || null);
     } finally {
       setLoading(false);
