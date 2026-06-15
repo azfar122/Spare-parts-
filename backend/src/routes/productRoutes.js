@@ -11,6 +11,7 @@ router.use(requireAuth);
 
 function normalizeProductPayload(body) {
   const mrp = Number(body.mrp || body.RP || 0);
+  const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? mrp);
   const payload = {
     partName: String(body.partName || body.productName || body['Product name'] || body['Product Name'] || '').trim(),
     partCode: String(body.partCode || body.partNo || body.PartNo || body['Part No'] || body['Part No.'] || '').trim(),
@@ -18,7 +19,7 @@ function normalizeProductPayload(body) {
     brand: String(body.brand || '').trim(),
     category: String(body.category || '').trim(),
     type: String(body.type || body.model || '').trim(),
-    bookingPrice: mrp,
+    bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
     quantity: Number(body.quantity || 0),
@@ -29,6 +30,7 @@ function normalizeProductPayload(body) {
   if (!payload.model) throw new Error('Model is required');
   if (!payload.partCode) throw new Error('Part code is required');
   if (!Number.isFinite(payload.mrp) || payload.mrp < 0) throw new Error('MRP must be a valid amount');
+  if (!Number.isFinite(payload.bookingPrice) || payload.bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(payload.quantity) || payload.quantity < 0) throw new Error('Quantity must be a whole number');
   if (!Number.isInteger(payload.minOrderQty) || payload.minOrderQty < 1) throw new Error('Minimum order quantity must be at least 1');
 
@@ -42,12 +44,13 @@ function normalizeProductUpdate(body, existing = {}) {
   const category = String(body.category || body.Category || existing.category || existing.Category || '').trim();
   const type = String(body.type || body.Type || body.model || existing.type || existing.Type || existing.model || '').trim();
   const mrp = Number(body.mrp ?? body.RP ?? existing.mrp ?? existing.RP ?? 0);
-  const bookingPrice = mrp;
+  const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
   const quantity = Number(body.quantity ?? body['Stock Qty'] ?? existing.quantity ?? existing['Stock Qty'] ?? 0);
   const minOrderQty = Number(body.minOrderQty || existing.minOrderQty || 1);
 
   if (!partName) throw new Error('Product name is required');
   if (!Number.isFinite(mrp) || mrp < 0) throw new Error('Retail price must be a valid amount');
+  if (!Number.isFinite(bookingPrice) || bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(quantity) || quantity < 0) throw new Error('Quantity must be a whole number');
   if (!Number.isInteger(minOrderQty) || minOrderQty < 1) throw new Error('Minimum order quantity must be at least 1');
 
@@ -81,11 +84,36 @@ function normalizeProductUpdate(body, existing = {}) {
   return update;
 }
 
+function exactText(value) {
+  return { $regex: `^${String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
+}
+
+function duplicateProductQuery(payload, excludeId) {
+  const query = {
+    active: { $ne: false },
+    partName: exactText(payload.partName),
+    partCode: exactText(payload.partCode),
+    brand: exactText(payload.brand),
+    category: exactText(payload.category),
+    type: exactText(payload.type),
+    mrp: payload.mrp
+  };
+
+  if (excludeId) query._id = { $ne: excludeId };
+
+  return query;
+}
+
+function duplicateProductMessage(product) {
+  const stock = Number(product?.quantity || 0).toLocaleString();
+  return `This product already exists with stock ${stock}. Please increase the stock on the existing product instead of creating a new one.`;
+}
+
 function productErrorResponse(err, res) {
   if (err?.code === 11000) {
     const field = Object.keys(err.keyPattern || err.keyValue || {})[0] || 'field';
     const label = field === 'partCode' ? 'Part code' : field;
-    return res.status(409).json({ message: `${label} already exists` });
+    return res.status(409).json({ message: `${label} already exists. Please increase the stock on the existing product instead of creating a new one.` });
   }
 
   if (err?.name === 'ValidationError') {
@@ -93,7 +121,7 @@ function productErrorResponse(err, res) {
     return res.status(400).json({ message });
   }
 
-  return res.status(400).json({ message: err.message || 'Product could not be saved' });
+  return res.status(err.statusCode || 400).json({ message: err.message || 'Product could not be saved' });
 }
 
 router.get('/', async (req, res) => {
@@ -165,7 +193,15 @@ router.post('/', requireRole('admin'), async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const [product] = await Product.create([normalizeProductPayload(req.body)], { session });
+    const payload = normalizeProductPayload(req.body);
+    const duplicateProduct = await Product.findOne(duplicateProductQuery(payload)).session(session).lean();
+    if (duplicateProduct) {
+      const err = new Error(duplicateProductMessage(duplicateProduct));
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const [product] = await Product.create([payload], { session });
     const warehouses = await Warehouse.find({ active: { $ne: false } }).session(session);
 
     if (warehouses.length) {
@@ -204,6 +240,13 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     const existing = await Product.findById(req.params.id).lean();
     if (!existing) return res.status(404).json({ message: 'Product not found' });
     const update = normalizeProductUpdate(req.body, existing);
+    const duplicateProduct = await Product.findOne(duplicateProductQuery(update, existing._id)).lean();
+    if (duplicateProduct) {
+      const err = new Error(duplicateProductMessage(duplicateProduct));
+      err.statusCode = 409;
+      throw err;
+    }
+
     await Product.collection.updateOne(
       { _id: existing._id },
       { $set: update }

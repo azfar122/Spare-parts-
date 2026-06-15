@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
 
-export default function ProductTable({ products, onDetail, onEdit, onDelete, salesMode, onAddSale, selectedIndex = -1, selectedActionIndex = 0, onSelectIndex, onMoveSelection, onMoveAction, onActivateAction, startIndex = 0, warehouseColumns = [] }) {
+export default function ProductTable({ products, onDetail, onEdit, onDelete, salesMode, onAddSale, selectedIndex = -1, selectedActionIndex = 0, onSelectIndex, onMoveSelection, onMoveAction, onActivateAction, startIndex = 0, warehouseColumns = [], showBookingPrice = false, onToggleBookingPrice }) {
   const rowRefs = useRef([]);
   const productName = product => product.productName || product.partName || '-';
   const partNo = product => product.partNo || product.partCode || '-';
@@ -42,8 +42,19 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
 
   if (!salesMode) {
     return <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-soft">
+      {onToggleBookingPrice && <div className="flex justify-end border-b bg-white px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggleBookingPrice}
+          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          title={showBookingPrice ? 'Hide booking price' : 'Show booking price'}
+        >
+          {showBookingPrice ? <EyeOff size={16} /> : <Eye size={16} />}
+          Booking Price
+        </button>
+      </div>}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1140px] text-sm">
+        <table className={`w-full text-sm ${showBookingPrice ? 'min-w-[1240px]' : 'min-w-[1140px]'}`}>
           <thead className="bg-slate-50 text-slate-500">
             <tr>
               <th className="p-4 text-left">Sr No.</th>
@@ -52,6 +63,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <th className="p-4 text-left">Brand</th>
               <th className="p-4 text-left">Category</th>
               <th className="p-4 text-left">Type</th>
+              {showBookingPrice && <th className="p-4 text-right">Booking Price</th>}
               <th className="p-4 text-right">Retail Price(RP)</th>
               <th className="p-4 text-right">Stock Qty</th>
               <th className="p-4 text-right">Action</th>
@@ -74,6 +86,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 <td className="p-4 text-slate-600">{p.brand || '-'}</td>
                 <td className="p-4 text-slate-600">{p.category || '-'}</td>
                 <td className="p-4 text-slate-600">{p.type || p.model || '-'}</td>
+                {showBookingPrice && <td className="p-4 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
                 <td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
                 <td className="p-4 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
                 <td className="p-4">
@@ -92,6 +105,17 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
   }
 
   return <div className="overflow-hidden rounded-3xl bg-white shadow-soft border border-slate-100">
+    {onToggleBookingPrice && <div className="flex justify-end border-b bg-white px-3 py-2">
+      <button
+        type="button"
+        onClick={onToggleBookingPrice}
+        className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+        title={showBookingPrice ? 'Hide booking price' : 'Show booking price'}
+      >
+        {showBookingPrice ? <EyeOff size={15} /> : <Eye size={15} />}
+        Booking Price
+      </button>
+    </div>}
     <div>
       <table className="w-full table-fixed text-xs">
         <thead className="bg-slate-50 text-slate-500">
@@ -102,6 +126,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
             <th className="w-[7%] p-3 text-left">Brand</th>
             <th className="w-[7%] p-3 text-left">Category</th>
             <th className="w-[6%] p-3 text-left">Type</th>
+            {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
             <th className="w-[9%] p-3 text-right">Retail Price(RP)</th>
             <th className="w-[6%] p-3 text-right">Stock Qty</th>
             {warehouseColumns.map(warehouse => (
@@ -128,6 +153,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <td className="p-3 text-slate-600 break-words">{p.brand || '-'}</td>
               <td className="p-3 text-slate-600 break-words">{p.category || '-'}</td>
               <td className="p-3 text-slate-600 break-words">{p.type || p.model || '-'}</td>
+              {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
               <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
               <td className="p-3 text-right font-semibold"><span className={p.quantity <= 5 ? 'text-red-600 font-bold' : ''}>{Number(p.quantity || 0).toLocaleString()}</span></td>
               {warehouseColumns.map(warehouse => (

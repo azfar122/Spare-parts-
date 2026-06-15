@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BookOpen, Edit, Plus, RefreshCw, Search, Trash2, Wallet } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
 import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
@@ -28,6 +29,7 @@ export default function CustomerLedger() {
   const [entryMode, setEntryMode] = useState(null);
   const [entryForm, setEntryForm] = useState({ amount: '', direction: 'increase', description: '' });
   const [deletingCustomerId, setDeletingCustomerId] = useState('');
+  const [deleteCustomerTarget, setDeleteCustomerTarget] = useState(null);
   const [notice, setNotice] = useState(null);
 
   async function load() {
@@ -104,13 +106,19 @@ export default function CustomerLedger() {
     }
   }
 
-  async function deleteCustomer(customer) {
-    if (!window.confirm(`Delete ${customer.name} from Khata? Existing bills and ledger history will remain in reports.`)) return;
+  function requestDeleteCustomer(customer) {
+    setDeleteCustomerTarget(customer);
+  }
+
+  async function confirmDeleteCustomer() {
+    if (!deleteCustomerTarget) return;
+    const customer = deleteCustomerTarget;
     try {
       setDeletingCustomerId(customer._id);
       await api.delete(`/customers/${customer._id}`);
       setSelected(null);
       setDetail(null);
+      setDeleteCustomerTarget(null);
       await load();
       setNotice({ type: 'success', title: 'Customer Deleted', message: `${customer.name} was removed from Khata.` });
     } catch (err) {
@@ -176,7 +184,7 @@ export default function CustomerLedger() {
               <button onClick={() => openEdit(detail.customer)} className="rounded-xl border px-4 py-2 inline-flex items-center gap-2"><Edit size={16}/>Edit</button>
               <button onClick={() => setEntryMode('payment')} className="rounded-xl bg-emerald-600 text-white px-4 py-2 inline-flex items-center gap-2"><Wallet size={16}/>Payment</button>
               <button onClick={() => setEntryMode('adjustment')} className="rounded-xl bg-brand-dark text-white px-4 py-2">Adjustment</button>
-              <button onClick={() => deleteCustomer(detail.customer)} disabled={deletingCustomerId === detail.customer._id} className="rounded-xl border border-red-200 px-4 py-2 text-red-600 inline-flex items-center gap-2 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16}/>{deletingCustomerId === detail.customer._id ? 'Deleting...' : 'Delete'}</button>
+              <button onClick={() => requestDeleteCustomer(detail.customer)} disabled={deletingCustomerId === detail.customer._id} className="rounded-xl border border-red-200 px-4 py-2 text-red-600 inline-flex items-center gap-2 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16}/>{deletingCustomerId === detail.customer._id ? 'Deleting...' : 'Delete'}</button>
             </div>
           </div>
           <div className="grid md:grid-cols-4 gap-4 p-6 border-b">
@@ -232,5 +240,14 @@ export default function CustomerLedger() {
         <button disabled={saving} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:opacity-70 inline-flex items-center justify-center gap-2">{saving && <ButtonSpinner />}{saving ? 'Saving...' : 'Save Entry'}</button>
       </form>
     </Modal>}
+    {deleteCustomerTarget && <ConfirmModal
+      title="Delete Customer"
+      message={`Delete ${deleteCustomerTarget.name} from Khata? Existing bills and ledger history will remain in reports.`}
+      confirmLabel="Delete"
+      destructive
+      busy={deletingCustomerId === deleteCustomerTarget._id}
+      onCancel={() => setDeleteCustomerTarget(null)}
+      onConfirm={confirmDeleteCustomer}
+    />}
   </Layout>;
 }

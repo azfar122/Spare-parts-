@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
 import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
@@ -20,13 +21,18 @@ export default function AdminDashboard() {
   const limit = 50;
   const [tab, setTab] = useState('inventory');
   const [returns, setReturns] = useState([]);
+  const [users, setUsers] = useState([]);
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showBookingPrice, setShowBookingPrice] = useState(false);
   const [hasExactMatch, setHasExactMatch] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingReturns, setLoadingReturns] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [approvingUserId, setApprovingUserId] = useState('');
   const [deletingProductId, setDeletingProductId] = useState('');
+  const [deleteProductTarget, setDeleteProductTarget] = useState(null);
   const [notice, setNotice] = useState(null);
 
   async function load(pageNum = 1) {
@@ -71,20 +77,33 @@ export default function AdminDashboard() {
     }
   }
 
+  async function loadUsers() {
+    try {
+      setLoadingUsers(true);
+      const r = await api.get('/users');
+      setUsers(r.data || []);
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Users Failed', message: err.response?.data?.message || err.message });
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
   async function handleAddProduct(e) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formElement = e.currentTarget;
+    const form = new FormData(formElement);
     const body = Object.fromEntries(form.entries());
     body.model = body.type || body.model || 'COMMON';
     body.mrp = Number(body.mrp);
+    body.bookingPrice = Number(body.bookingPrice || 0);
     body.quantity = Number(body.quantity);
-    body.bookingPrice = body.mrp;
     body.minOrderQty = Number(body.minOrderQty || 1);
     try {
       setAddingProduct(true);
       await api.post('/products', body);
+      formElement.reset();
       setShowAddProduct(false);
-      e.currentTarget.reset();
       await load(1);
       setNotice({ type: 'success', title: 'Product Added', message: 'Product stock added successfully.' });
     } catch (err) {
@@ -104,6 +123,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'returns') {
       loadReturns();
+    } else if (tab === 'users') {
+      loadUsers();
     }
   }, [tab]);
   useEffect(() => {
@@ -154,7 +175,7 @@ export default function AdminDashboard() {
     if (!product) return;
     if (selectedProductAction === 0) setSelected(product);
     else if (selectedProductAction === 1) setEditing(product);
-    else if (selectedProductAction === 2) deleteProduct(product);
+    else if (selectedProductAction === 2) requestDeleteProduct(product);
   }
 
   async function saveEdit(e) {
@@ -162,7 +183,7 @@ export default function AdminDashboard() {
     const form = new FormData(e.currentTarget);
     const body = Object.fromEntries(form.entries());
     body.model = body.type || body.model || 'COMMON';
-    body.mrp = Number(body.mrp); body.bookingPrice = body.mrp; body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty);
+    body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice || 0); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty);
     try {
       setSavingEdit(true);
       await api.put(`/products/${editing._id}`, body);
@@ -175,20 +196,39 @@ export default function AdminDashboard() {
     }
   }
 
-  async function deleteProduct(product) {
+  function requestDeleteProduct(product) {
+    setDeleteProductTarget(product);
+  }
+
+  async function confirmDeleteProduct() {
+    if (!deleteProductTarget) return;
+    const product = deleteProductTarget;
     const name = product.productName || product.partName || 'this product';
-    if (!window.confirm(`Delete ${name} from inventory? Sales history will remain available.`)) return;
     try {
       setDeletingProductId(product._id);
       await api.delete(`/products/${product._id}`);
       if (selected?._id === product._id) setSelected(null);
       if (editing?._id === product._id) setEditing(null);
+      setDeleteProductTarget(null);
       await load(page);
       setNotice({ type: 'success', title: 'Product Deleted', message: `${name} was removed from inventory.` });
     } catch (err) {
       setNotice({ type: 'error', title: 'Delete Failed', message: err.response?.data?.message || err.message });
     } finally {
       setDeletingProductId('');
+    }
+  }
+
+  async function approveUser(user) {
+    try {
+      setApprovingUserId(user._id);
+      await api.put(`/users/${user._id}/approve`);
+      await loadUsers();
+      setNotice({ type: 'success', title: 'Account Approved', message: `${user.name} can now log in to sales.` });
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Approval Failed', message: err.response?.data?.message || err.message });
+    } finally {
+      setApprovingUserId('');
     }
   }
 
@@ -199,6 +239,7 @@ export default function AdminDashboard() {
     <div className="mb-5 flex gap-3 border-b">
       <button onClick={() => setTab('inventory')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'inventory' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Inventory</button>
       <button onClick={() => setTab('returns')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'returns' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Returns</button>
+      <button onClick={() => setTab('users')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'users' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Users</button>
     </div>
 
     {tab === 'inventory' && <>
@@ -225,8 +266,10 @@ export default function AdminDashboard() {
         onActivateAction={activateProductAction}
         onDetail={setSelected}
         onEdit={setEditing}
-        onDelete={deleteProduct}
+        onDelete={requestDeleteProduct}
         startIndex={(page - 1) * limit}
+        showBookingPrice={showBookingPrice}
+        onToggleBookingPrice={() => setShowBookingPrice(value => !value)}
       />}
       
       {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
@@ -284,13 +327,58 @@ export default function AdminDashboard() {
       </div>
     </>}
 
-    {selected && <Modal title="Product Details" onClose={()=>setSelected(null)}><div className="grid grid-cols-2 gap-4 text-sm">{Object.entries(selected).filter(([k])=> ((!k.startsWith('_') || k==='_id') && !['bookingPrice', 'CCP', 'CP', 'Customer price (cc)', 'Customer Price'].includes(k))).map(([k,v])=><div key={k} className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">{k}</p><p className="font-semibold break-all">{String(v)}</p></div>)}</div></Modal>}
+    {tab === 'users' && <div className="rounded-3xl bg-white shadow-soft overflow-hidden">
+      {loadingUsers ? (
+        <LoadingState label="Loading users..." />
+      ) : users.length === 0 ? (
+        <div className="p-8 text-center text-slate-500">No users found</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-slate-50 text-slate-500">
+              <th className="px-4 py-3 text-left font-semibold">Name</th>
+              <th className="px-4 py-3 text-left font-semibold">Username</th>
+              <th className="px-4 py-3 text-left font-semibold">Role</th>
+              <th className="px-4 py-3 text-left font-semibold">Status</th>
+              <th className="px-4 py-3 text-right font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(user => (
+              <tr key={user._id} className="border-b hover:bg-slate-50">
+                <td className="px-4 py-3 font-semibold">{user.name}</td>
+                <td className="px-4 py-3 text-slate-600">{user.username}</td>
+                <td className="px-4 py-3 capitalize">{user.role}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${user.active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                    {user.active ? 'Approved' : 'Pending Approval'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {!user.active && user.role === 'sales' ? (
+                    <button onClick={() => approveUser(user)} disabled={approvingUserId === user._id} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-red px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70">
+                      {approvingUserId === user._id ? <ButtonSpinner /> : <CheckCircle2 size={16} />}
+                      {approvingUserId === user._id ? 'Approving...' : 'Approve'}
+                    </button>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>}
+
+    {selected && <Modal title="Product Details" onClose={()=>setSelected(null)}><div className="grid grid-cols-2 gap-4 text-sm">{Object.entries(selected).filter(([k])=> ((!k.startsWith('_') || k==='_id') && !['CCP', 'CP', 'Customer price (cc)', 'Customer Price'].includes(k))).map(([k,v])=><div key={k} className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">{k}</p><p className="font-semibold break-all">{String(v)}</p></div>)}</div></Modal>}
     {editing && <Modal title="Edit Product" onClose={()=>setEditing(null)}><form onSubmit={saveEdit} className="grid grid-cols-2 gap-4">
       <label className="text-sm font-medium">Product name<input name="partName" defaultValue={editing.partName} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Part No<input name="partCode" defaultValue={editing.partCode} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Brand<input name="brand" defaultValue={editing.brand || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Category<input name="category" defaultValue={editing.category || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Type<input name="type" defaultValue={editing.type || editing.model || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
+      <label className="text-sm font-medium">Booking Price<input name="bookingPrice" type="number" min="0" step="0.01" defaultValue={editing.bookingPrice || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Retail Price(RP)<input name="mrp" type="number" min="0" step="0.01" defaultValue={editing.mrp} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Stock Qty<input name="quantity" type="number" min="0" defaultValue={editing.quantity} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Min Order Qty<input name="minOrderQty" type="number" min="1" defaultValue={editing.minOrderQty} className="mt-1 w-full rounded-xl border p-3" /></label>
@@ -307,6 +395,7 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium">Brand<input name="brand" placeholder="e.g., Honda" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Category<input name="category" placeholder="e.g., Engine" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Type<input name="type" placeholder="e.g., COMMON" className="mt-1 w-full rounded-xl border p-3" /></label>
+        <label className="text-sm font-medium">Booking Price <span className="text-red-500">*</span><input name="bookingPrice" type="number" placeholder="e.g., 450" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Retail Price(RP) <span className="text-red-500">*</span><input name="mrp" type="number" placeholder="e.g., 500" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Stock Qty <span className="text-red-500">*</span><input name="quantity" type="number" placeholder="e.g., 100" className="mt-1 w-full rounded-xl border p-3" min="1" required /></label>
         <label className="text-sm font-medium">Min Order Qty <span className="text-slate-400">(optional)</span><input name="minOrderQty" type="number" placeholder="e.g., 1" className="mt-1 w-full rounded-xl border p-3" min="1" /></label>
@@ -320,5 +409,14 @@ export default function AdminDashboard() {
         <button type="button" disabled={addingProduct} onClick={()=>setShowAddProduct(false)} className="flex-1 rounded-xl border py-3 font-bold disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
       </div>
     </form></Modal>}
+    {deleteProductTarget && <ConfirmModal
+      title="Delete Product"
+      message={`Delete ${deleteProductTarget.productName || deleteProductTarget.partName || 'this product'} from inventory? Sales history will remain available.`}
+      confirmLabel="Delete"
+      destructive
+      busy={deletingProductId === deleteProductTarget._id}
+      onCancel={() => setDeleteProductTarget(null)}
+      onConfirm={confirmDeleteProduct}
+    />}
   </Layout>;
 }

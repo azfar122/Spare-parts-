@@ -54,6 +54,11 @@ export default function ShopReceipt({ receipt }) {
       <span>Date&nbsp;&nbsp;{dateOnly(receipt.createdAt)}</span>
     </div>
 
+    <div className="receipt-sold-by">
+      <span>Salesperson</span>
+      <b>{receipt.soldBy?.name || receipt.soldBy?.username || '-'}</b>
+    </div>
+
     <div className="receipt-account">
       <span>Ac #</span>
       <div>
@@ -69,7 +74,6 @@ export default function ShopReceipt({ receipt }) {
           <th>Description</th>
           <th>Qty</th>
           <th>Price</th>
-          <th>Disc</th>
           <th>Amount</th>
         </tr>
       </thead>
@@ -83,7 +87,6 @@ export default function ShopReceipt({ receipt }) {
             </td>
             <td>{money(item.qty)}</td>
             <td>{money(item.price)}</td>
-            <td>{money(item.discount)}</td>
             <td>{money(item.lineTotal)}</td>
           </tr>
         ))}
@@ -92,10 +95,10 @@ export default function ShopReceipt({ receipt }) {
 
     <div className="receipt-totals">
       <div><span>Subtotal</span><b>{money(receipt.subtotal)}</b></div>
-      <div><span>Discount</span><b>{money(receipt.discountTotal)}</b></div>
-      <div><span>Paid</span><b>{money(receipt.paidAmount)}</b></div>
-      <div><span>Balance</span><b>{money(receipt.dueAmount)}</b></div>
       <div className="receipt-grand"><span>Total</span><b>{money(receipt.grandTotal)}</b></div>
     </div>
+    <p className="receipt-return-policy" dir="rtl" lang="ur">
+      خریدا ہوا سامان صرف اصل بل کے ساتھ اور خریداری کے 15 دن کے اندر واپس یا تبدیل کیا جا سکتا ہے۔
+    </p>
   </div>;
 }

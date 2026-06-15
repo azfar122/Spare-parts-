@@ -14,6 +14,8 @@ export default function SalesAnalytics() {
   const [endDate, setEndDate] = useState('');
   const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [receiptNo, setReceiptNo] = useState('');
   const [selectedSale, setSelectedSale] = useState(null);
   const [loading, setLoading] = useState(false);
   const [productSearchActive, setProductSearchActive] = useState(false);
@@ -29,12 +31,14 @@ export default function SalesAnalytics() {
       endDate,
       productCode,
       productName,
+      customerName,
+      receiptNo,
       ...overrides
     };
   }
 
   function hasSearchFilters(filters) {
-    return Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim());
+    return Boolean(filters.startDate || filters.endDate || filters.productCode?.trim() || filters.productName?.trim() || filters.customerName?.trim() || filters.receiptNo?.trim());
   }
 
   async function load(pageNum = 1, overrides = {}) {
@@ -48,6 +52,8 @@ export default function SalesAnalytics() {
       if (filters.endDate) params.endDate = filters.endDate;
       if (filters.productCode) params.productCode = filters.productCode;
       if (filters.productName) params.productName = filters.productName;
+      if (filters.customerName) params.customerName = filters.customerName;
+      if (filters.receiptNo) params.receiptNo = filters.receiptNo;
 
       const r = await api.get('/sales', { params });
       setSales(r.data.items);
@@ -96,7 +102,9 @@ export default function SalesAnalytics() {
     setEndDate('');
     setProductCode('');
     setProductName('');
-    load(1, { startDate: '', endDate: '', productCode: '', productName: '' });
+    setCustomerName('');
+    setReceiptNo('');
+    load(1, { startDate: '', endDate: '', productCode: '', productName: '', customerName: '', receiptNo: '' });
   }
 
   function matchedProductNames(sale) {
@@ -126,7 +134,7 @@ export default function SalesAnalytics() {
     <div className="rounded-3xl bg-white p-6 shadow-soft border mb-6">
       <h3 className="font-bold text-lg mb-4">Filters</h3>
       <form onSubmit={handleSearch}>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div>
             <label className="text-sm font-medium text-slate-600">Start Date</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1 w-full rounded-xl border p-3" />
@@ -138,6 +146,14 @@ export default function SalesAnalytics() {
           <div>
             <label className="text-sm font-medium text-slate-600">Part Code</label>
             <input type="text" value={productCode} onChange={e => setProductCode(e.target.value)} placeholder="Search by part code" className="mt-1 w-full rounded-xl border p-3" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-600">Bill No</label>
+            <input type="text" value={receiptNo} onChange={e => setReceiptNo(e.target.value)} placeholder="Search by bill no" className="mt-1 w-full rounded-xl border p-3" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-600">Customer Name</label>
+            <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Search by customer" className="mt-1 w-full rounded-xl border p-3" />
           </div>
           <div className="relative">
             <label className="text-sm font-medium text-slate-600">Product Name</label>
@@ -198,6 +214,7 @@ export default function SalesAnalytics() {
             <th className="p-4 text-left">Receipt #</th>
             <th className="p-4 text-left">Date</th>
             <th className="p-4 text-left">Customer</th>
+            <th className="p-4 text-left">Sold By</th>
             <th className="p-4 text-right">Items</th>
             {productSearchActive && <th className="p-4 text-left">Product Name</th>}
             {productSearchActive && <th className="p-4 text-right">Net Qty</th>}
@@ -217,6 +234,7 @@ export default function SalesAnalytics() {
               <td className="p-4 font-semibold text-brand-red">{sale.receiptNo}</td>
               <td className="p-4">{new Date(sale.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
               <td className="p-4">{sale.customerName}</td>
+              <td className="p-4 font-semibold">{sale.soldBy?.name || sale.soldBy?.username || '-'}</td>
               <td className="p-4 text-right">{sale.items.length}</td>
               {productSearchActive && <td className="p-4 font-semibold">{matchedProductNames(sale)}</td>}
               {productSearchActive && <td className="p-4 text-right font-semibold">{Number(sale.matchedQty || 0).toLocaleString()}</td>}
@@ -259,6 +277,7 @@ export default function SalesAnalytics() {
         <div className="grid grid-cols-2 gap-2">
           <div><p className="text-slate-500">Date</p><p className="font-semibold">{new Date(selectedSale.createdAt).toLocaleString('en-IN')}</p></div>
           <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selectedSale.customerName}</p></div>
+          <div><p className="text-slate-500">Sold By</p><p className="font-semibold">{selectedSale.soldBy?.name || selectedSale.soldBy?.username || '-'}</p></div>
           <div>
             <p className="text-slate-500">Return Status</p>
             <p><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${returnStatusClass(selectedSale.returnStatus)}`}>{returnStatusLabel(selectedSale.returnStatus)}</span></p>
