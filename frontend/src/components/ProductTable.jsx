@@ -56,22 +56,22 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
           Booking Price
         </button>
       </div>}
-      <div className="overflow-x-auto">
-        <table className={`w-full text-sm ${showBookingPrice ? 'min-w-[1420px]' : 'min-w-[1320px]'}`}>
+      <div>
+        <table className="w-full table-fixed text-xs">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
-              <th className="p-4 text-left">Sr No.</th>
-              <th className="p-4 text-left">Product Name</th>
-              <th className="p-4 text-left">Part No</th>
-              <th className="p-4 text-left">Brand</th>
-              <th className="p-4 text-left">Category</th>
-              <th className="p-4 text-left">Type</th>
-              {showBookingPrice && <th className="p-4 text-right">Booking Price</th>}
-              <th className="p-4 text-right">Retail Price(RP)</th>
-              <th className="p-4 text-right">Stock Qty</th>
-              <th className="p-4 text-right">Total Qty</th>
-              <th className="p-4 text-right">Minimum Qty</th>
-              <th className="p-4 text-right">Action</th>
+              <th className="w-[4%] p-3 text-left">Sr No.</th>
+              <th className="w-[17%] p-3 text-left">Product Name</th>
+              <th className="w-[10%] p-3 text-left">Part No</th>
+              <th className="w-[9%] p-3 text-left">Brand</th>
+              <th className="w-[9%] p-3 text-left">Category</th>
+              <th className="w-[8%] p-3 text-left">Type</th>
+              {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
+              <th className="w-[8%] p-3 text-right">Retail Price(RP)</th>
+              <th className="w-[6%] p-3 text-right">Stock Qty</th>
+              <th className="w-[6%] p-3 text-right">Total Qty</th>
+              <th className="w-[6%] p-3 text-right">Minimum Qty</th>
+              <th className="w-[9%] p-3 text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -85,22 +85,22 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 onKeyDown={e => handleRowKeyDown(e, p, index)}
                 className={`border-t outline-none hover:bg-slate-50/70 ${selectedIndex === index ? 'bg-red-50 ring-2 ring-inset ring-brand-red/40' : ''}`}
               >
-                <td className="p-4 font-semibold text-slate-500">{startIndex + index + 1}</td>
-                <td className="p-4 font-semibold">{productName(p)}</td>
-                <td className="p-4 text-slate-600">{partNo(p)}</td>
-                <td className="p-4 text-slate-600">{p.brand || '-'}</td>
-                <td className="p-4 text-slate-600">{p.category || '-'}</td>
-                <td className="p-4 text-slate-600">{p.type || p.model || '-'}</td>
-                {showBookingPrice && <td className="p-4 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
-                <td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
-                <td className="p-4 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
-                <td className={`p-4 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{totalQty(p).toLocaleString()}</td>
-                <td className="p-4 text-right">{minimumQty(p).toLocaleString()}</td>
-                <td className="p-4">
+                <td className="p-3 font-semibold text-slate-500">{startIndex + index + 1}</td>
+                <td className="break-words p-3 font-semibold">{productName(p)}</td>
+                <td className="break-words p-3 text-slate-600">{partNo(p)}</td>
+                <td className="break-words p-3 text-slate-600">{p.brand || '-'}</td>
+                <td className="break-words p-3 text-slate-600">{p.category || '-'}</td>
+                <td className="break-words p-3 text-slate-600">{p.type || p.model || '-'}</td>
+                {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
+                <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
+                <td className="p-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
+                <td className={`p-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{totalQty(p).toLocaleString()}</td>
+                <td className="p-3 text-right">{minimumQty(p).toLocaleString()}</td>
+                <td className="p-3">
                   <div className="flex justify-end gap-2">
-                    <button title="View details" className={actionButtonClass(index, 0, 'rounded-xl border px-3 py-2 hover:bg-slate-100')} onClick={() => onDetail(p)}><Eye size={16}/></button>
-                    {onEdit && <button title="Edit product" className={actionButtonClass(index, 1, 'rounded-xl border px-3 py-2 hover:bg-slate-100')} onClick={() => onEdit(p)}><Pencil size={16}/></button>}
-                    {onDelete && <button title="Delete product" className={actionButtonClass(index, onEdit ? 2 : 1, 'rounded-xl border border-red-200 px-3 py-2 text-red-600 hover:bg-red-50')} onClick={() => onDelete(p)}><Trash2 size={16}/></button>}
+                    <button title="View details" className={actionButtonClass(index, 0, 'rounded-lg border p-2 hover:bg-slate-100')} onClick={() => onDetail(p)}><Eye size={15}/></button>
+                    {onEdit && <button title="Edit product" className={actionButtonClass(index, 1, 'rounded-lg border p-2 hover:bg-slate-100')} onClick={() => onEdit(p)}><Pencil size={15}/></button>}
+                    {onDelete && <button title="Delete product" className={actionButtonClass(index, onEdit ? 2 : 1, 'rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50')} onClick={() => onDelete(p)}><Trash2 size={15}/></button>}
                   </div>
                 </td>
               </tr>

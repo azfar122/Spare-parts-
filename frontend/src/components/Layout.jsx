@@ -118,6 +118,20 @@ export default function Layout({ title, subtitle, children, wide = false }) {
                       <div className="rounded-xl bg-white p-2"><p className="text-slate-500">Warehouse</p><p className="font-bold">{Number(item.warehouseQuantity || 0).toLocaleString()}</p></div>
                       <div className="rounded-xl bg-white p-2"><p className="text-slate-500">Minimum</p><p className="font-bold text-brand-red">{Number(item.minimumQuantity || 0).toLocaleString()}</p></div>
                     </div>
+                    <div className="mt-3 rounded-xl bg-white p-3 text-xs">
+                      <p className="font-semibold text-slate-700">Warehouse stock</p>
+                      {item.warehouseStocks?.length ? <div className="mt-2 space-y-2">
+                        {item.warehouseStocks.map(stock => (
+                          <div key={`${item._id}-${stock.warehouseId}`} className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-900">{stock.warehouseName || 'Warehouse'}</p>
+                              {stock.warehouseLocation && <p className="truncate text-slate-500">{stock.warehouseLocation}</p>}
+                            </div>
+                            <p className="shrink-0 font-bold text-slate-900">{Number(stock.quantity || 0).toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div> : <p className="mt-2 text-slate-500">No warehouse stock available.</p>}
+                    </div>
                   </div>
                 </div>
               </div>

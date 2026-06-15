@@ -132,26 +132,40 @@ function productErrorResponse(err, res) {
 }
 
 async function lowStockProducts() {
-  const [products, warehouseTotals] = await Promise.all([
+  const [products, warehouseRows] = await Promise.all([
     Product.find({ active: { $ne: false }, minimumQuantity: { $gt: 0 } }).sort({ partName: 1, 'Product Name': 1 }).lean(),
-    WarehouseStock.aggregate([
-      { $group: { _id: '$product', warehouseQuantity: { $sum: '$quantity' } } }
-    ])
+    WarehouseStock.find({ quantity: { $gt: 0 } })
+      .populate('warehouse', 'name location active')
+      .lean()
   ]);
 
-  const warehouseQtyByProduct = new Map(warehouseTotals.map(item => [String(item._id), Number(item.warehouseQuantity || 0)]));
+  const warehouseStocksByProduct = new Map();
+  for (const row of warehouseRows) {
+    if (row.warehouse?.active === false) continue;
+    const productId = String(row.product);
+    const warehouseStock = {
+      warehouseId: String(row.warehouse?._id || row.warehouse),
+      warehouseName: row.warehouse?.name || 'Warehouse',
+      warehouseLocation: row.warehouse?.location || '',
+      quantity: Number(row.quantity || 0)
+    };
+    if (!warehouseStocksByProduct.has(productId)) warehouseStocksByProduct.set(productId, []);
+    warehouseStocksByProduct.get(productId).push(warehouseStock);
+  }
 
   return products
     .map(product => {
       const serialized = serializeProduct(product);
       const shopQuantity = Number(serialized.quantity || 0);
-      const warehouseQuantity = warehouseQtyByProduct.get(String(product._id)) || 0;
+      const warehouseStocks = warehouseStocksByProduct.get(String(product._id)) || [];
+      const warehouseQuantity = warehouseStocks.reduce((sum, stock) => sum + Number(stock.quantity || 0), 0);
       const totalQuantity = shopQuantity + warehouseQuantity;
       const minimumQuantity = Number(serialized.minimumQuantity || 0);
       return {
         ...serialized,
         shopQuantity,
         warehouseQuantity,
+        warehouseStocks,
         totalQuantity,
         minimumQuantity
       };

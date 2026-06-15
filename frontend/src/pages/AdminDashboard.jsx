@@ -235,7 +235,7 @@ export default function AdminDashboard() {
 
   const totalPages = Math.ceil(total / limit);
 
-  return <Layout title="Admin Inventory" subtitle="Manage products, prices, quantity and product details.">
+  return <Layout title="Admin Inventory" subtitle="Manage products, prices, quantity and product details." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="mb-5 flex gap-3 border-b">
       <button onClick={() => setTab('inventory')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'inventory' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Inventory</button>
