@@ -17,7 +17,7 @@ export default function DatabaseAdmin() {
       setLoading(true);
       const [usersRes, productsRes, salesRes] = await Promise.all([
         api.get('/users'),
-        api.get('/products', { params: { limit: 1000 } }),
+        api.get('/products', { params: { limit: 1000, includeWarehouseStock: 'true' } }),
         api.get('/sales', { params: { limit: 1000 } })
       ]);
 
@@ -80,9 +80,14 @@ export default function DatabaseAdmin() {
 
     {activeTab === 'products' && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Part No</th><th className="p-4 text-left">Product Name</th><th className="p-4 text-left">Brand</th><th className="p-4 text-left">Category</th><th className="p-4 text-left">Type</th><th className="p-4 text-right">Booking Price</th><th className="p-4 text-right">Retail Price(RP)</th><th className="p-4 text-right">Stock Qty</th></tr></thead>
+        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Part No</th><th className="p-4 text-left">Product Name</th><th className="p-4 text-left">Brand</th><th className="p-4 text-left">Category</th><th className="p-4 text-left">Type</th><th className="p-4 text-right">Booking Price</th><th className="p-4 text-right">Retail Price(RP)</th><th className="p-4 text-right">Stock Qty</th><th className="p-4 text-right">Total Qty</th><th className="p-4 text-right">Minimum Qty</th></tr></thead>
         <tbody>
-          {products.slice(0, 100).map(p => <tr key={p._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold text-brand-red">{p.partNo || p.partCode || '-'}</td><td className="p-4">{p.productName || p.partName || '-'}</td><td className="p-4 text-slate-500">{p.brand || '-'}</td><td className="p-4 text-slate-500">{p.category || '-'}</td><td className="p-4 text-slate-500">{p.type || p.model || '-'}</td><td className="p-4 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td><td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td><td className="p-4 text-right"><span className={p.quantity <= 5 ? 'text-red-600 font-bold' : ''}>{p.quantity}</span></td></tr>)}
+          {products.slice(0, 100).map(p => {
+            const totalQty = Number(p.quantity || 0) + Number(p.warehouseQuantity || 0);
+            const minimumQty = Number(p.minimumQuantity || 0);
+            const lowStock = minimumQty > 0 && totalQty <= minimumQty;
+            return <tr key={p._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold text-brand-red">{p.partNo || p.partCode || '-'}</td><td className="p-4">{p.productName || p.partName || '-'}</td><td className="p-4 text-slate-500">{p.brand || '-'}</td><td className="p-4 text-slate-500">{p.category || '-'}</td><td className="p-4 text-slate-500">{p.type || p.model || '-'}</td><td className="p-4 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td><td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td><td className="p-4 text-right">{Number(p.quantity || 0).toLocaleString()}</td><td className={`p-4 text-right font-semibold ${lowStock ? 'text-red-600' : ''}`}>{totalQty.toLocaleString()}</td><td className="p-4 text-right">{minimumQty.toLocaleString()}</td></tr>;
+          })}
         </tbody>
       </table>
       {products.length > 100 && <div className="p-4 text-slate-500 text-sm border-t">Showing first 100 of {products.length} products</div>}

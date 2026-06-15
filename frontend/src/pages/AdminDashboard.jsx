@@ -38,7 +38,7 @@ export default function AdminDashboard() {
   async function load(pageNum = 1) {
     try {
       setLoadingProducts(true);
-      const r = await api.get('/products', { params: { q, limit, page: pageNum } });
+      const r = await api.get('/products', { params: { q, limit, page: pageNum, includeWarehouseStock: 'true' } });
       setProducts(r.data.items);
       setSelectedProductIndex(r.data.items?.length ? 0 : -1);
       setSelectedProductAction(0);
@@ -99,6 +99,7 @@ export default function AdminDashboard() {
     body.bookingPrice = Number(body.bookingPrice || 0);
     body.quantity = Number(body.quantity);
     body.minOrderQty = Number(body.minOrderQty || 1);
+    body.minimumQuantity = Number(body.minimumQuantity || 0);
     try {
       setAddingProduct(true);
       await api.post('/products', body);
@@ -183,7 +184,7 @@ export default function AdminDashboard() {
     const form = new FormData(e.currentTarget);
     const body = Object.fromEntries(form.entries());
     body.model = body.type || body.model || 'COMMON';
-    body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice || 0); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty);
+    body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice || 0); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty || 1); body.minimumQuantity = Number(body.minimumQuantity || 0);
     try {
       setSavingEdit(true);
       await api.put(`/products/${editing._id}`, body);
@@ -382,6 +383,7 @@ export default function AdminDashboard() {
       <label className="text-sm font-medium">Retail Price(RP)<input name="mrp" type="number" min="0" step="0.01" defaultValue={editing.mrp} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Stock Qty<input name="quantity" type="number" min="0" defaultValue={editing.quantity} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Min Order Qty<input name="minOrderQty" type="number" min="1" defaultValue={editing.minOrderQty} className="mt-1 w-full rounded-xl border p-3" /></label>
+      <label className="text-sm font-medium">Minimum Qty<input name="minimumQuantity" type="number" min="0" defaultValue={editing.minimumQuantity || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="col-span-2 text-sm font-medium">description<textarea name="description" defaultValue={editing.description} className="mt-1 w-full rounded-xl border p-3" /></label>
       <button disabled={savingEdit} className="col-span-2 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
         {savingEdit && <ButtonSpinner />}
@@ -399,6 +401,7 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium">Retail Price(RP) <span className="text-red-500">*</span><input name="mrp" type="number" placeholder="e.g., 500" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Stock Qty <span className="text-red-500">*</span><input name="quantity" type="number" placeholder="e.g., 100" className="mt-1 w-full rounded-xl border p-3" min="1" required /></label>
         <label className="text-sm font-medium">Min Order Qty <span className="text-slate-400">(optional)</span><input name="minOrderQty" type="number" placeholder="e.g., 1" className="mt-1 w-full rounded-xl border p-3" min="1" /></label>
+        <label className="text-sm font-medium">Minimum Qty <span className="text-slate-400">(optional)</span><input name="minimumQuantity" type="number" placeholder="e.g., 10" className="mt-1 w-full rounded-xl border p-3" min="0" /></label>
       </div>
       <label className="text-sm font-medium">Description<textarea name="description" placeholder="Product description..." className="mt-1 w-full rounded-xl border p-3" rows="3" /></label>
       <div className="flex gap-3">

@@ -12,6 +12,7 @@ router.use(requireAuth);
 function normalizeProductPayload(body) {
   const mrp = Number(body.mrp || body.RP || 0);
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? mrp);
+  const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? 0);
   const payload = {
     partName: String(body.partName || body.productName || body['Product name'] || body['Product Name'] || '').trim(),
     partCode: String(body.partCode || body.partNo || body.PartNo || body['Part No'] || body['Part No.'] || '').trim(),
@@ -22,6 +23,7 @@ function normalizeProductPayload(body) {
     bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
+    minimumQuantity,
     quantity: Number(body.quantity || 0),
     description: String(body.description || '').trim()
   };
@@ -33,6 +35,7 @@ function normalizeProductPayload(body) {
   if (!Number.isFinite(payload.bookingPrice) || payload.bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(payload.quantity) || payload.quantity < 0) throw new Error('Quantity must be a whole number');
   if (!Number.isInteger(payload.minOrderQty) || payload.minOrderQty < 1) throw new Error('Minimum order quantity must be at least 1');
+  if (!Number.isInteger(payload.minimumQuantity) || payload.minimumQuantity < 0) throw new Error('Minimum quantity must be zero or greater');
 
   return payload;
 }
@@ -47,12 +50,14 @@ function normalizeProductUpdate(body, existing = {}) {
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
   const quantity = Number(body.quantity ?? body['Stock Qty'] ?? existing.quantity ?? existing['Stock Qty'] ?? 0);
   const minOrderQty = Number(body.minOrderQty || existing.minOrderQty || 1);
+  const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? existing.minimumQuantity ?? existing.minimumQty ?? existing.minQuantity ?? existing['Minimum Quantity'] ?? 0);
 
   if (!partName) throw new Error('Product name is required');
   if (!Number.isFinite(mrp) || mrp < 0) throw new Error('Retail price must be a valid amount');
   if (!Number.isFinite(bookingPrice) || bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(quantity) || quantity < 0) throw new Error('Quantity must be a whole number');
   if (!Number.isInteger(minOrderQty) || minOrderQty < 1) throw new Error('Minimum order quantity must be at least 1');
+  if (!Number.isInteger(minimumQuantity) || minimumQuantity < 0) throw new Error('Minimum quantity must be zero or greater');
 
   const update = {
     partName,
@@ -63,6 +68,7 @@ function normalizeProductUpdate(body, existing = {}) {
     bookingPrice,
     mrp,
     minOrderQty,
+    minimumQuantity,
     quantity,
     description: String(body.description ?? existing.description ?? '').trim(),
     'Product Name': partName,
@@ -72,7 +78,8 @@ function normalizeProductUpdate(body, existing = {}) {
     CCP: bookingPrice,
     CP: bookingPrice,
     RP: mrp,
-    'Stock Qty': quantity
+    'Stock Qty': quantity,
+    'Minimum Quantity': minimumQuantity
   };
 
   if (partCode) {
@@ -122,6 +129,34 @@ function productErrorResponse(err, res) {
   }
 
   return res.status(err.statusCode || 400).json({ message: err.message || 'Product could not be saved' });
+}
+
+async function lowStockProducts() {
+  const [products, warehouseTotals] = await Promise.all([
+    Product.find({ active: { $ne: false }, minimumQuantity: { $gt: 0 } }).sort({ partName: 1, 'Product Name': 1 }).lean(),
+    WarehouseStock.aggregate([
+      { $group: { _id: '$product', warehouseQuantity: { $sum: '$quantity' } } }
+    ])
+  ]);
+
+  const warehouseQtyByProduct = new Map(warehouseTotals.map(item => [String(item._id), Number(item.warehouseQuantity || 0)]));
+
+  return products
+    .map(product => {
+      const serialized = serializeProduct(product);
+      const shopQuantity = Number(serialized.quantity || 0);
+      const warehouseQuantity = warehouseQtyByProduct.get(String(product._id)) || 0;
+      const totalQuantity = shopQuantity + warehouseQuantity;
+      const minimumQuantity = Number(serialized.minimumQuantity || 0);
+      return {
+        ...serialized,
+        shopQuantity,
+        warehouseQuantity,
+        totalQuantity,
+        minimumQuantity
+      };
+    })
+    .filter(product => product.minimumQuantity > 0 && product.totalQuantity <= product.minimumQuantity);
 }
 
 router.get('/', async (req, res) => {
@@ -181,6 +216,11 @@ router.get('/', async (req, res) => {
   }
 
   res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+});
+
+router.get('/low-stock', async (req, res) => {
+  const items = await lowStockProducts();
+  res.json({ items, total: items.length });
 });
 
 router.get('/:id', async (req, res) => {

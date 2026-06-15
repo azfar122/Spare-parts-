@@ -5,6 +5,9 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
   const rowRefs = useRef([]);
   const productName = product => product.productName || product.partName || '-';
   const partNo = product => product.partNo || product.partCode || '-';
+  const minimumQty = product => Number(product.minimumQuantity || 0);
+  const totalQty = product => Number(product.quantity || 0) + Number(product.warehouseQuantity || 0);
+  const isLowStock = product => minimumQty(product) > 0 && totalQty(product) <= minimumQty(product);
   const warehouseQty = (product, warehouseId) => {
     const stock = product.warehouseStocks?.find(item => String(item.warehouseId) === String(warehouseId));
     return Number(stock?.quantity || 0);
@@ -54,7 +57,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
         </button>
       </div>}
       <div className="overflow-x-auto">
-        <table className={`w-full text-sm ${showBookingPrice ? 'min-w-[1240px]' : 'min-w-[1140px]'}`}>
+        <table className={`w-full text-sm ${showBookingPrice ? 'min-w-[1420px]' : 'min-w-[1320px]'}`}>
           <thead className="bg-slate-50 text-slate-500">
             <tr>
               <th className="p-4 text-left">Sr No.</th>
@@ -66,6 +69,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               {showBookingPrice && <th className="p-4 text-right">Booking Price</th>}
               <th className="p-4 text-right">Retail Price(RP)</th>
               <th className="p-4 text-right">Stock Qty</th>
+              <th className="p-4 text-right">Total Qty</th>
+              <th className="p-4 text-right">Minimum Qty</th>
               <th className="p-4 text-right">Action</th>
             </tr>
           </thead>
@@ -89,6 +94,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 {showBookingPrice && <td className="p-4 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
                 <td className="p-4 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
                 <td className="p-4 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
+                <td className={`p-4 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{totalQty(p).toLocaleString()}</td>
+                <td className="p-4 text-right">{minimumQty(p).toLocaleString()}</td>
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
                     <button title="View details" className={actionButtonClass(index, 0, 'rounded-xl border px-3 py-2 hover:bg-slate-100')} onClick={() => onDetail(p)}><Eye size={16}/></button>
@@ -129,6 +136,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
             {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
             <th className="w-[9%] p-3 text-right">Retail Price(RP)</th>
             <th className="w-[6%] p-3 text-right">Stock Qty</th>
+            <th className="w-[6%] p-3 text-right">Total Qty</th>
+            <th className="w-[6%] p-3 text-right">Min Qty</th>
             {warehouseColumns.map(warehouse => (
               <th key={warehouse._id} className="w-[7%] p-3 text-right">{warehouse.name}</th>
             ))}
@@ -137,7 +146,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
         </thead>
         <tbody>
           {products.map((p, index) => {
-            const availableQty = Number(p.quantity || 0) + Number(p.warehouseQuantity || 0);
+            const availableQty = totalQty(p);
             return <tr
               key={p._id}
               ref={node => { rowRefs.current[index] = node; }}
@@ -155,7 +164,9 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <td className="p-3 text-slate-600 break-words">{p.type || p.model || '-'}</td>
               {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
               <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
-              <td className="p-3 text-right font-semibold"><span className={p.quantity <= 5 ? 'text-red-600 font-bold' : ''}>{Number(p.quantity || 0).toLocaleString()}</span></td>
+              <td className="p-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
+              <td className={`p-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{availableQty.toLocaleString()}</td>
+              <td className="p-3 text-right">{minimumQty(p).toLocaleString()}</td>
               {warehouseColumns.map(warehouse => (
                 <td key={warehouse._id} className="p-3 text-right text-slate-600">{warehouseQty(p, warehouse._id).toLocaleString()}</td>
               ))}

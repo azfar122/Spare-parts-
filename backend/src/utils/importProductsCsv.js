@@ -38,6 +38,7 @@ fs.createReadStream(path)
           bookingPrice: cleanNum(firstValue(row, ['Customer price (cc)', 'Customer Price (CC)', 'Customer Price', 'CC', 'Booking Price', 'bookingPrice'])),
           mrp: cleanNum(firstValue(row, ['Retail Price(RP)', 'Retail Price (RP)', 'Retail Price', 'RP', 'MRP', 'mrp'])),
           minOrderQty: cleanNum(row['Min Order Qty'] || row.minOrderQty || 1),
+          minimumQuantity: cleanNum(firstValue(row, ['Minimum Quantity', 'minimumQuantity', 'minimumQty', 'minQuantity'], 0)),
           quantity: cleanNum(row.Quantity || row.quantity || 0),
           active: true
         }},

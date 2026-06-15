@@ -153,6 +153,7 @@ export default function WarehouseStock() {
                   <th className="p-4 text-left">Type</th>
                   <th className="p-4 text-right">Retail Price(RP)</th>
                   <th className="p-4 text-right">Main Qty</th>
+                  <th className="p-4 text-right">Minimum Qty</th>
                   <th className="p-4 text-right">Warehouse Qty</th>
                   <th className="p-4 text-right">Action</th>
                 </tr>
@@ -168,6 +169,7 @@ export default function WarehouseStock() {
                     <td className="p-4 text-slate-500">{row.product.type || row.product.model || '-'}</td>
                     <td className="p-4 text-right">Rs {Number(row.product.mrp || 0).toLocaleString()}</td>
                     <td className="p-4 text-right">{row.product.quantity}</td>
+                    <td className="p-4 text-right">{Number(row.product.minimumQuantity || 0).toLocaleString()}</td>
                     <td className="p-4 text-right"><input id={`warehouse-stock-${row.product._id}`} type="number" min="0" defaultValue={row.warehouseStock} className="w-28 rounded-xl border p-2 text-right" /></td>
                     <td className="p-4 text-right">
                       <button onClick={() => updateStock(row, document.getElementById(`warehouse-stock-${row.product._id}`).value)} disabled={stockSavingId === row.product._id} className="rounded-xl bg-brand-red px-4 py-2 font-semibold text-white disabled:opacity-70">

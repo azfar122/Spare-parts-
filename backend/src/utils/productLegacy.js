@@ -10,6 +10,7 @@ export function serializeProduct(product) {
   const mrp = Number(retailPrice || 0) > 0 ? retailPrice : legacyPrice;
   const bookingPrice = Number(legacyPrice || 0) > 0 ? legacyPrice : mrp;
   const quantity = item?.quantity ?? item?.['Stock Qty'] ?? 0;
+  const minimumQuantity = item?.minimumQuantity ?? item?.minimumQty ?? item?.minQuantity ?? item?.['Minimum Quantity'] ?? 0;
 
   return {
     ...item,
@@ -21,6 +22,7 @@ export function serializeProduct(product) {
     bookingPrice,
     mrp,
     quantity,
+    minimumQuantity,
     productName,
     partNo
   };

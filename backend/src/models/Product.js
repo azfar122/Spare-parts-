@@ -10,6 +10,7 @@ const productSchema = new mongoose.Schema({
   bookingPrice: { type: Number, default: 0 },
   mrp: { type: Number, default: 0 },
   minOrderQty: { type: Number, default: 1 },
+  minimumQuantity: { type: Number, default: 0, min: 0 },
   quantity: { type: Number, default: 0, min: 0 },
   description: { type: String, default: '' },
   active: { type: Boolean, default: true }
