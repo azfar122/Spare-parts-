@@ -220,10 +220,10 @@ body { background: #f5f7fb; color: #0f172a; }
   #root,
   #root > div,
   main {
-    width: 0 !important;
+    width: 80mm !important;
     max-width: none !important;
     min-height: 0 !important;
-    height: 0 !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -235,18 +235,64 @@ body { background: #f5f7fb; color: #0f172a; }
   }
 
   body * { visibility: hidden !important; }
+  main > .fixed {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 80mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  main > .fixed > div {
+    display: block !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  main > .fixed > div > div:first-child {
+    display: none !important;
+  }
+  main > .fixed > div > div:last-child {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
   #receipt-print, #receipt-print * { visibility: visible !important; }
   #receipt-print {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 74mm !important;
     max-width: 74mm !important;
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
-    break-after: avoid;
-    page-break-after: avoid;
+    break-after: auto;
+    break-inside: auto;
+    page-break-after: auto;
+    page-break-inside: auto;
+  }
+  .receipt-items,
+  .receipt-items tbody {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .receipt-items tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .receipt-print-only {
     position: static !important;
