@@ -42,7 +42,10 @@ export default function SalesDashboard() {
   const [returnSaving, setReturnSaving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [showBookingPrice, setShowBookingPrice] = useState(false);
+  const [saleModalProduct, setSaleModalProduct] = useState(null);
+  const [saleDraft, setSaleDraft] = useState({ qty: '1', price: '', discount: '0' });
   const cartFieldRefs = useRef({});
+  const saleQtyRef = useRef(null);
 
   async function load(pageNum = 1) {
     try {
@@ -97,7 +100,7 @@ export default function SalesDashboard() {
     }
 
     function handleGlobalKeyDown(e) {
-      if (loadingProducts || receipt || returnForm || isTypingTarget(e.target)) return;
+      if (loadingProducts || receipt || returnForm || saleModalProduct || isTypingTarget(e.target)) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         moveProductSelection(1);
@@ -108,14 +111,18 @@ export default function SalesDashboard() {
         const product = products[selectedProductIndex];
         if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) {
           e.preventDefault();
-          addSale(product);
+          openSaleModal(product);
         }
       }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [loadingProducts, receipt, returnForm, products, selectedProductIndex]);
+  }, [loadingProducts, receipt, returnForm, saleModalProduct, products, selectedProductIndex]);
+  useEffect(() => {
+    if (!saleModalProduct) return;
+    window.requestAnimationFrame(() => saleQtyRef.current?.select());
+  }, [saleModalProduct]);
   useEffect(() => {
     setSelectedCart(current => {
       if (!cart.length) return { row: -1, field: 'qty' };
@@ -130,26 +137,62 @@ export default function SalesDashboard() {
     setWarehouseOptions(options => ({ ...options, [productId]: r.data || [] }));
   }
 
-  function addSale(p) {
+  function openSaleModal(product) {
+    if (!product || Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) <= 0) return;
+    setSaleModalProduct(product);
+    setSaleDraft({
+      qty: '1',
+      price: String(Number(product.mrp || 0)),
+      discount: '0'
+    });
+  }
+
+  function closeSaleModal() {
+    setSaleModalProduct(null);
+    setSaleDraft({ qty: '1', price: '', discount: '0' });
+  }
+
+  function addSale(p, values = {}) {
+    const qty = Math.max(1, Number(values.qty ?? 1) || 1);
+    const price = Number(values.price ?? p.mrp ?? 0) || 0;
+    const discount = Number(values.discount ?? 0) || 0;
     const existingIndex = cart.findIndex(i => i.productId === p._id);
     if (existingIndex >= 0) {
       setSelectedCart({ row: existingIndex, field: 'qty' });
+      setCart(c => c.map((item, idx) => idx === existingIndex ? {
+        ...item,
+        qty: Number(item.qty || 0) + qty,
+        price,
+        discount: Number(item.discount || 0) + discount,
+        warehouseId: Number(item.qty || 0) + qty <= Number(item.stock || 0) ? '' : item.warehouseId
+      } : item));
     } else {
       setSelectedCart({ row: cart.length, field: 'qty' });
       setCart(c => [...c, {
         productId: p._id,
         partName: p.partName,
         partCode: p.partCode,
-        qty: 1,
-        price: p.mrp,
-        discount: 0,
+        qty,
+        price,
+        discount,
         stock: p.quantity,
         warehouseQuantity: p.warehouseQuantity || 0,
         warehouseStocks: p.warehouseStocks || [],
         warehouseId: ''
       }]);
     }
-    if (Number(p.quantity || 0) <= 0 && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
+    if (qty > Number(p.quantity || 0) && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
+  }
+
+  function submitSaleModal(e) {
+    e.preventDefault();
+    if (!saleModalProduct) return;
+    const qty = Number(saleDraft.qty || 0);
+    const availableQty = Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0);
+    if (qty <= 0) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Enter a quantity greater than zero.' });
+    if (qty > availableQty) return setNotice({ type: 'error', title: 'Not Enough Stock', message: `Only ${availableQty.toLocaleString()} pieces are available.` });
+    addSale(saleModalProduct, saleDraft);
+    closeSaleModal();
   }
 
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
@@ -193,11 +236,11 @@ export default function SalesDashboard() {
 
   function addSelectedProduct() {
     const product = products[selectedProductIndex];
-    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
+    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) openSaleModal(product);
   }
 
   function activateProductAction(product) {
-    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) addSale(product);
+    if (product && Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) > 0) openSaleModal(product);
   }
 
   function warehouseSummary(item) {
@@ -380,10 +423,6 @@ export default function SalesDashboard() {
   const totalPages = Math.ceil(total / limit);
   const billTotal = totals.sub - totals.dis;
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
-  const activeCartIndex = selectedCart.row >= 0 && selectedCart.row < cart.length ? selectedCart.row : cart.length - 1;
-  const activeCartItem = activeCartIndex >= 0 ? cart[activeCartIndex] : null;
-  const activeShortageQty = activeCartItem ? Math.max(0, Number(activeCartItem.qty || 0) - Number(activeCartItem.stock || 0)) : 0;
-  const activeWarehouseOptions = activeCartItem ? warehouseOptions[activeCartItem.productId] || [] : [];
 
   return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
@@ -397,43 +436,6 @@ export default function SalesDashboard() {
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
         </div>
-        {activeCartItem && <div className="mb-5 rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 break-words">{activeCartItem.partName}</p>
-              <p className="mt-1 text-xs text-slate-500">{activeCartItem.partCode || '-'} · Main {activeCartItem.stock} · {warehouseSummary(activeCartItem)}</p>
-            </div>
-            <button type="button" onClick={() => removeCartItem(activeCartIndex)} className="rounded-xl border p-2 text-slate-500 hover:bg-red-50 hover:text-brand-red" title={`Remove ${activeCartItem.partName}`} aria-label={`Remove ${activeCartItem.partName}`}><X size={18}/></button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-            <div>
-              <label className="text-xs font-semibold text-slate-600">Qty</label>
-              <input type="number" min="1" max={Number(activeCartItem.stock || 0) + Number(activeCartItem.warehouseQuantity || 0)} value={activeCartItem.qty} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'qty' })} onChange={e => updateCartQty(activeCartIndex, e.target.value, activeCartItem)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600">Price</label>
-              <input type="number" min="0" value={activeCartItem.price} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'price' })} onChange={e => update(activeCartIndex, 'price', e.target.value)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600">Discount</label>
-              <input type="number" min="0" value={activeCartItem.discount} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'discount' })} onChange={e => update(activeCartIndex, 'discount', e.target.value)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
-            </div>
-            <div className="rounded-xl bg-slate-50 px-4 py-3 text-right">
-              <p className="text-xs font-semibold text-slate-500">Line Total</p>
-              <p className="text-lg font-bold text-slate-900">Rs {Math.max(0, Number(activeCartItem.qty || 0) * Number(activeCartItem.price || 0) - Number(activeCartItem.discount || 0)).toLocaleString()}</p>
-            </div>
-          </div>
-          {activeShortageQty > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <label className="text-xs font-semibold text-amber-800">Main stock short by {activeShortageQty}. Select warehouse source.</label>
-            <select value={activeCartItem.warehouseId || ''} onChange={e => updateCartWarehouse(activeCartIndex, e.target.value)} className="mt-2 w-full rounded-xl border bg-white p-2 text-sm">
-              <option value="">Choose warehouse</option>
-              {activeWarehouseOptions.map(stock => (
-                <option key={stock.warehouse._id} value={stock.warehouse._id}>{stock.warehouse.name} · available {stock.quantity}</option>
-              ))}
-            </select>
-            {activeWarehouseOptions.length === 0 && <p className="mt-2 text-xs text-amber-800">No warehouse stock available for this product.</p>}
-          </div>}
-        </div>}
         {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
         {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
         {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable
@@ -445,7 +447,7 @@ export default function SalesDashboard() {
           onMoveSelection={moveProductSelection}
           onMoveAction={() => {}}
           onActivateAction={activateProductAction}
-          onAddSale={addSale}
+          onAddSale={openSaleModal}
           onDetail={()=>{}}
           startIndex={(page - 1) * limit}
           warehouseColumns={warehouses}
@@ -564,6 +566,88 @@ export default function SalesDashboard() {
         </div>}
       </aside>
     </div>
+
+    {saleModalProduct && <Modal title="Sell Product" onClose={closeSaleModal}>
+      <form onSubmit={submitSaleModal} className="grid gap-5">
+        <div className="rounded-2xl border bg-slate-50 p-4">
+          <p className="break-words text-lg font-bold text-slate-900">{saleModalProduct.partName}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {saleModalProduct.partCode || '-'} · Main {Number(saleModalProduct.quantity || 0).toLocaleString()} · {warehouseSummary(saleModalProduct)}
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+            <div className="rounded-xl bg-white p-3">
+              <p className="text-xs font-semibold text-slate-500">Retail Price</p>
+              <p className="font-bold text-slate-900">Rs {Number(saleModalProduct.mrp || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-white p-3">
+              <p className="text-xs font-semibold text-slate-500">Main Stock</p>
+              <p className="font-bold text-slate-900">{Number(saleModalProduct.quantity || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-white p-3">
+              <p className="text-xs font-semibold text-slate-500">Total Stock</p>
+              <p className="font-bold text-slate-900">{(Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0)).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className="text-sm font-semibold text-slate-700">Qty</label>
+            <input
+              ref={saleQtyRef}
+              type="number"
+              min="1"
+              max={Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0)}
+              value={saleDraft.qty}
+              onChange={e => setSaleDraft(current => ({ ...current, qty: e.target.value }))}
+              className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-700">Price</label>
+            <input
+              type="number"
+              min="0"
+              value={saleDraft.price}
+              onChange={e => setSaleDraft(current => ({ ...current, price: e.target.value }))}
+              className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-700">Discount</label>
+            <input
+              type="number"
+              min="0"
+              value={saleDraft.discount}
+              onChange={e => setSaleDraft(current => ({ ...current, discount: e.target.value }))}
+              className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-2xl bg-brand-dark p-4 text-white">
+          <span className="font-semibold">Line Total</span>
+          <span className="text-2xl font-bold">
+            Rs {Math.max(0, Number(saleDraft.qty || 0) * Number(saleDraft.price || 0) - Number(saleDraft.discount || 0)).toLocaleString()}
+          </span>
+        </div>
+
+        {Number(saleDraft.qty || 0) > Number(saleModalProduct.quantity || 0) && Number(saleModalProduct.warehouseQuantity || 0) > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Main stock is short by {(Number(saleDraft.qty || 0) - Number(saleModalProduct.quantity || 0)).toLocaleString()}. Select the warehouse source from the bill item after adding it.
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button type="submit" className="flex-1 rounded-xl bg-brand-red py-3 font-bold text-white">
+            Add to Bill
+          </button>
+          <button type="button" onClick={closeSaleModal} className="rounded-xl border px-5 py-3 font-bold">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>}
     
     {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)} fillViewport>
       <div className="receipt-screen-content">
