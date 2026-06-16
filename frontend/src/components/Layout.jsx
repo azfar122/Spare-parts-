@@ -52,10 +52,64 @@ export default function Layout({ title, subtitle, children, wide = false }) {
     return () => socket.disconnect();
   }, [user]);
 
-  return (
-    <div className="min-h-screen overflow-x-hidden">
-      <div className="w-full bg-brand-dark text-white">
-        <div className="mx-auto flex max-w-[calc(100vw-3rem)] items-center justify-between px-6 py-4">
+  return <div className="min-h-screen overflow-x-hidden">
+    <div className="w-full bg-brand-dark text-white">
+      <div className="mx-auto flex max-w-[calc(100vw-3rem)] items-center justify-between px-6 py-4">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="Asif Auto Traders" className="h-14 w-20 rounded-xl bg-white object-contain p-1.5 shadow-soft" />
+          <div><h1 className="text-xl font-bold">Asif Auto Traders</h1><p className="text-sm text-slate-300">Inventory, sales receipts and returns</p></div>
+        </div>
+        <div className="ml-auto flex items-center gap-4">
+          {user?.role === 'admin' && (
+            <div className="flex gap-2">
+              <Link to="/admin" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Store size={16}/>Inventory
+              </Link>
+              <Link to="/admin/sales" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/sales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <BarChart3 size={16}/>Sales
+              </Link>
+              <Link to="/admin/customers" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/customers' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <BookOpen size={16}/>Khata
+              </Link>
+              <Link to="/admin/warehouses" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/warehouses' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Building2 size={16}/>Warehouse
+              </Link>
+              <Link to="/admin/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Package size={16}/>Orders
+              </Link>
+            </div>
+          )}
+          {user?.role === 'sales' && (
+            <div className="flex gap-2">
+              <Link to="/sales" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Store size={16}/>Counter
+              </Link>
+              <Link to="/sales/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Package size={16}/>Orders
+              </Link>
+            </div>
+          )}
+          {user && <button
+            type="button"
+            onClick={() => {
+              setNotificationOpen(true);
+              loadNotifications();
+            }}
+            className="no-print relative rounded-xl bg-white/10 p-2.5 hover:bg-white/20"
+            title="Stock notifications"
+          >
+            <Bell size={18} />
+            {lowStockItems.length > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brand-red px-1 text-[11px] font-bold text-white">{lowStockItems.length}</span>}
+          </button>}
+          <span className="text-sm bg-white/10 px-3 py-2 rounded-full flex items-center gap-2"><ShieldCheck size={16}/>{user?.role}</span>
+          <button onClick={logout} className="no-print rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-sm flex gap-2"><LogOut size={16}/>Logout</button>
+        </div>
+      </div>
+    </div>
+    {notificationOpen && <div className="no-print fixed inset-0 z-[80]">
+      <button type="button" className="absolute inset-0 bg-slate-950/40" onClick={() => setNotificationOpen(false)} aria-label="Close notifications" />
+      <aside className="absolute right-0 top-0 flex h-full w-[min(420px,100vw)] flex-col bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b p-5">
           <div className="flex items-center gap-3">
             <img
               src={logo}
@@ -301,16 +355,17 @@ export default function Layout({ title, subtitle, children, wide = false }) {
             )}
           </aside>
         </div>
-      )}
-      <main
-        className={`mx-auto px-6 py-8 ${wide ? "max-w-[calc(100vw-3rem)]" : "max-w-7xl"}`}
-      >
-        <div className="mb-7">
-          <h2 className="text-3xl font-bold tracking-tight">{title}</h2>
-          <p className="text-slate-500 mt-1">{subtitle}</p>
-        </div>
-        {children}
-      </main>
-    </div>
-  );
+        {user && <div className="border-t p-4">
+          <Link to={user.role === 'admin' ? '/admin/purchase-orders' : '/sales/purchase-orders'} onClick={() => setNotificationOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-dark px-4 py-3 font-semibold text-white">
+            <PackagePlus size={18} />
+            Open Orders
+          </Link>
+        </div>}
+      </aside>
+    </div>}
+    <main className={`mx-auto px-6 py-8 ${wide ? 'max-w-[calc(100vw-3rem)]' : 'max-w-7xl'}`}>
+      <div className="mb-7"><h2 className="text-3xl font-bold tracking-tight">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
+      {children}
+    </main>
+  </div>;
 }

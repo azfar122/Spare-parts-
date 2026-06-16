@@ -116,6 +116,13 @@ export default function SalesDashboard() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [loadingProducts, receipt, returnForm, products, selectedProductIndex]);
+  useEffect(() => {
+    setSelectedCart(current => {
+      if (!cart.length) return { row: -1, field: 'qty' };
+      if (current.row >= cart.length) return { row: cart.length - 1, field: current.field };
+      return current;
+    });
+  }, [cart.length]);
 
   async function loadWarehouseOptions(productId) {
     if (warehouseOptions[productId]) return;
@@ -124,18 +131,24 @@ export default function SalesDashboard() {
   }
 
   function addSale(p) {
-    setCart(c => c.some(i=>i.productId===p._id) ? c : [...c, {
-      productId: p._id,
-      partName: p.partName,
-      partCode: p.partCode,
-      qty: 1,
-      price: p.mrp,
-      discount: 0,
-      stock: p.quantity,
-      warehouseQuantity: p.warehouseQuantity || 0,
-      warehouseStocks: p.warehouseStocks || [],
-      warehouseId: ''
-    }]);
+    const existingIndex = cart.findIndex(i => i.productId === p._id);
+    if (existingIndex >= 0) {
+      setSelectedCart({ row: existingIndex, field: 'qty' });
+    } else {
+      setSelectedCart({ row: cart.length, field: 'qty' });
+      setCart(c => [...c, {
+        productId: p._id,
+        partName: p.partName,
+        partCode: p.partCode,
+        qty: 1,
+        price: p.mrp,
+        discount: 0,
+        stock: p.quantity,
+        warehouseQuantity: p.warehouseQuantity || 0,
+        warehouseStocks: p.warehouseStocks || [],
+        warehouseId: ''
+      }]);
+    }
     if (Number(p.quantity || 0) <= 0 && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
   }
 
@@ -367,6 +380,10 @@ export default function SalesDashboard() {
   const totalPages = Math.ceil(total / limit);
   const billTotal = totals.sub - totals.dis;
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
+  const activeCartIndex = selectedCart.row >= 0 && selectedCart.row < cart.length ? selectedCart.row : cart.length - 1;
+  const activeCartItem = activeCartIndex >= 0 ? cart[activeCartIndex] : null;
+  const activeShortageQty = activeCartItem ? Math.max(0, Number(activeCartItem.qty || 0) - Number(activeCartItem.stock || 0)) : 0;
+  const activeWarehouseOptions = activeCartItem ? warehouseOptions[activeCartItem.productId] || [] : [];
 
   return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
@@ -380,6 +397,43 @@ export default function SalesDashboard() {
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
         </div>
+        {activeCartItem && <div className="mb-5 rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-bold text-slate-900 break-words">{activeCartItem.partName}</p>
+              <p className="mt-1 text-xs text-slate-500">{activeCartItem.partCode || '-'} · Main {activeCartItem.stock} · {warehouseSummary(activeCartItem)}</p>
+            </div>
+            <button type="button" onClick={() => removeCartItem(activeCartIndex)} className="rounded-xl border p-2 text-slate-500 hover:bg-red-50 hover:text-brand-red" title={`Remove ${activeCartItem.partName}`} aria-label={`Remove ${activeCartItem.partName}`}><X size={18}/></button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Qty</label>
+              <input type="number" min="1" max={Number(activeCartItem.stock || 0) + Number(activeCartItem.warehouseQuantity || 0)} value={activeCartItem.qty} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'qty' })} onChange={e => updateCartQty(activeCartIndex, e.target.value, activeCartItem)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Price</label>
+              <input type="number" min="0" value={activeCartItem.price} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'price' })} onChange={e => update(activeCartIndex, 'price', e.target.value)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600">Discount</label>
+              <input type="number" min="0" value={activeCartItem.discount} onFocus={() => setSelectedCart({ row: activeCartIndex, field: 'discount' })} onChange={e => update(activeCartIndex, 'discount', e.target.value)} className="mt-1 w-full rounded-xl border p-3 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" />
+            </div>
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-right">
+              <p className="text-xs font-semibold text-slate-500">Line Total</p>
+              <p className="text-lg font-bold text-slate-900">Rs {Math.max(0, Number(activeCartItem.qty || 0) * Number(activeCartItem.price || 0) - Number(activeCartItem.discount || 0)).toLocaleString()}</p>
+            </div>
+          </div>
+          {activeShortageQty > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <label className="text-xs font-semibold text-amber-800">Main stock short by {activeShortageQty}. Select warehouse source.</label>
+            <select value={activeCartItem.warehouseId || ''} onChange={e => updateCartWarehouse(activeCartIndex, e.target.value)} className="mt-2 w-full rounded-xl border bg-white p-2 text-sm">
+              <option value="">Choose warehouse</option>
+              {activeWarehouseOptions.map(stock => (
+                <option key={stock.warehouse._id} value={stock.warehouse._id}>{stock.warehouse.name} · available {stock.quantity}</option>
+              ))}
+            </select>
+            {activeWarehouseOptions.length === 0 && <p className="mt-2 text-xs text-amber-800">No warehouse stock available for this product.</p>}
+          </div>}
+        </div>}
         {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
         {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
         {loadingProducts ? <LoadingState label="Loading products..." /> : <ProductTable
@@ -422,10 +476,13 @@ export default function SalesDashboard() {
           {cart.map((i,idx)=>{
             const shortageQty = Math.max(0, Number(i.qty || 0) - Number(i.stock || 0));
             const availableWarehouseOptions = warehouseOptions[i.productId] || [];
-            return <div key={i.productId} className={`relative rounded-2xl p-3 pr-11 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
+            return <div key={i.productId} onClick={() => setSelectedCart({ row: idx, field: selectedCart.field || 'qty' })} className={`relative cursor-pointer rounded-2xl p-3 pr-11 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
             <button
               type="button"
-              onClick={() => removeCartItem(idx)}
+              onClick={(event) => {
+                event.stopPropagation();
+                removeCartItem(idx);
+              }}
               className="absolute right-3 top-3 rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-brand-red"
               title={`Remove ${i.partName} from bill`}
               aria-label={`Remove ${i.partName} from bill`}
@@ -508,9 +565,11 @@ export default function SalesDashboard() {
       </aside>
     </div>
     
-    {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)}>
-      <ShopReceipt receipt={receipt} />
-      <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
+    {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)} fillViewport>
+      <div className="receipt-screen-content">
+        <ShopReceipt receipt={receipt} />
+        <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
+      </div>
     </Modal>}
     
     {returnForm && <Modal title="Process Return" onClose={resetReturnState}>

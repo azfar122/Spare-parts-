@@ -9,7 +9,6 @@ import { productStockSet, serializeProduct } from '../utils/productLegacy.js';
 
 const router = express.Router();
 router.use(requireAuth);
-router.use(requireRole('admin'));
 
 async function addProductStock(productId, received, options = {}) {
   let query = Product.findById(productId).lean();
@@ -95,7 +94,7 @@ async function findOrCreateProductForItem(item, initialMainStock = 0, fallbackPa
   return newProduct._id;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin', 'sales'), async (req, res) => {
   const { status, page = 1, limit = 50 } = req.query;
   const filter = {};
   if (status) filter.status = status;
@@ -108,13 +107,13 @@ router.get('/', async (req, res) => {
   res.json({ items: orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRole('admin', 'sales'), async (req, res) => {
   const order = await PurchaseOrder.findById(req.params.id).populate('items.product').populate('createdBy', 'name');
   if (!order) return res.status(404).json({ message: 'Order not found' });
   res.json(order);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireRole('admin', 'sales'), async (req, res) => {
   try {
     const { orderNumber, totalPrice, items, notes } = req.body;
     if (!orderNumber || !totalPrice || !items?.length) {
@@ -145,7 +144,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id/receive', async (req, res) => {
+router.put('/:id/receive', requireRole('admin'), async (req, res) => {
   try {
     const { itemIndex, receivedQty, stockDestination = 'shop', warehouseId } = req.body;
     const order = await PurchaseOrder.findById(req.params.id);
@@ -189,7 +188,7 @@ router.put('/:id/receive', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { orderNumber, totalPrice, items, notes } = req.body;
     const order = await PurchaseOrder.findByIdAndUpdate(
@@ -204,7 +203,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const order = await PurchaseOrder.findByIdAndDelete(req.params.id);
     if (!order) return res.status(404).json({ message: 'Order not found' });

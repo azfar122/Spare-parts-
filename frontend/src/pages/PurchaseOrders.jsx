@@ -6,7 +6,11 @@ import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
-export default function PurchaseOrders() {
+export default function PurchaseOrders({
+  canReceive = true,
+  title = 'Purchase Orders',
+  subtitle = 'Manage orders from manufacturers and track inventory receipts.'
+}) {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -60,8 +64,8 @@ export default function PurchaseOrders() {
   useEffect(() => {
     loadOrders(1);
     loadProducts();
-    loadWarehouses();
-  }, []);
+    if (canReceive) loadWarehouses();
+  }, [canReceive]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -123,16 +127,17 @@ export default function PurchaseOrders() {
     const colors = { pending: 'bg-yellow-100 text-yellow-700', partial: 'bg-blue-100 text-blue-700', received: 'bg-green-100 text-green-700' };
     return <span className={`px-3 py-1 rounded-full text-xs font-medium ${colors[status]}`}>{status.toUpperCase()}</span>;
   };
+  const getCreatorName = (order) => order?.createdBy?.name || 'Unknown';
 
-  return <Layout title="Purchase Orders" subtitle="Manage orders from manufacturers and track inventory receipts.">
+  return <Layout title={title} subtitle={subtitle}>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <button onClick={() => setShowForm(true)} className="mb-6 rounded-xl bg-brand-red text-white px-6 py-3 font-bold flex items-center gap-2"><Plus size={20}/>New Order</button>
 
     {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Order #</th><th className="p-4 text-left">Date</th><th className="p-4 text-right">Total Price</th><th className="p-4 text-right">Items</th><th className="p-4 text-left">Status</th><th className="p-4 text-center">Action</th></tr></thead>
+        <thead className="bg-slate-50"><tr><th className="p-4 text-left">Order #</th><th className="p-4 text-left">Date</th><th className="p-4 text-left">Created By</th><th className="p-4 text-right">Total Price</th><th className="p-4 text-right">Items</th><th className="p-4 text-left">Status</th><th className="p-4 text-center">Action</th></tr></thead>
         <tbody>
-          {orders.map(o => <tr key={o._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold">{o.orderNumber}</td><td className="p-4 text-sm">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td><td className="p-4 text-right">Rs {Number(o.totalPrice).toLocaleString()}</td><td className="p-4 text-right">{o.items.length}</td><td className="p-4">{getStatusBadge(o.status)}</td><td className="p-4 text-center"><button onClick={() => setSelectedOrder(o)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td></tr>)}
+          {orders.map(o => <tr key={o._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold">{o.orderNumber}</td><td className="p-4 text-sm">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td><td className="p-4 font-medium text-slate-700">{getCreatorName(o)}</td><td className="p-4 text-right">Rs {Number(o.totalPrice).toLocaleString()}</td><td className="p-4 text-right">{o.items.length}</td><td className="p-4">{getStatusBadge(o.status)}</td><td className="p-4 text-center"><button onClick={() => setSelectedOrder(o)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td></tr>)}
         </tbody>
       </table>
     </div>}
@@ -239,8 +244,9 @@ export default function PurchaseOrders() {
 
     {selectedOrder && <Modal title={`Order ${selectedOrder.orderNumber}`} onClose={() => setSelectedOrder(null)}>
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div><p className="text-slate-500">Date</p><p className="font-semibold">{new Date(selectedOrder.createdAt).toLocaleDateString('en-IN')}</p></div>
+          <div><p className="text-slate-500">Created By</p><p className="font-semibold">{getCreatorName(selectedOrder)}</p></div>
           <div><p className="text-slate-500">Total Price</p><p className="font-semibold">Rs {Number(selectedOrder.totalPrice).toLocaleString()}</p></div>
           <div><p className="text-slate-500">Status</p><p>{getStatusBadge(selectedOrder.status)}</p></div>
         </div>
@@ -259,14 +265,14 @@ export default function PurchaseOrders() {
                 <span>Ordered: {item.qty}</span>
                 <span>Received: {item.received}</span>
               </div>
-              {item.status !== 'received' && <button onClick={() => setReceiveForm({ itemIndex: idx, receivedQty: item.qty, stockDestination: 'shop', warehouseId: '' })} className="w-full rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-bold flex items-center justify-center gap-1"><Check size={14}/>Mark as Received</button>}
+              {canReceive && item.status !== 'received' && <button onClick={() => setReceiveForm({ itemIndex: idx, receivedQty: item.qty, stockDestination: 'shop', warehouseId: '' })} className="w-full rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-bold flex items-center justify-center gap-1"><Check size={14}/>Mark as Received</button>}
             </div>
           ))}
         </div>
       </div>
     </Modal>}
 
-    {receiveForm && <Modal title="Receive Items" onClose={() => setReceiveForm(null)}>
+    {canReceive && receiveForm && <Modal title="Receive Items" onClose={() => setReceiveForm(null)}>
       <form onSubmit={handleReceive} className="space-y-4">
         <div>
           <label className="text-sm font-medium">Total Quantity Received</label>

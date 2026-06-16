@@ -285,7 +285,7 @@ export default function SalesAnalytics() {
     </div>}
 
     {selectedSale && <Modal title={`Receipt ${selectedSale.receiptNo}`} onClose={() => setSelectedSale(null)}>
-      <div className="space-y-4 text-sm">
+      <div className="receipt-screen-content space-y-4 text-sm">
         <div className="grid grid-cols-2 gap-2">
           <div><p className="text-slate-500">Date</p><p className="font-semibold">{new Date(selectedSale.createdAt).toLocaleString('en-IN')}</p></div>
           <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selectedSale.customerName}</p></div>
