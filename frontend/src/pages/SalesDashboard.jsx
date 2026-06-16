@@ -570,6 +570,9 @@ export default function SalesDashboard() {
         <ShopReceipt receipt={receipt} />
         <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
       </div>
+      <div className="receipt-print-only" aria-hidden="true">
+        <ShopReceipt receipt={receipt} />
+      </div>
     </Modal>}
     
     {returnForm && <Modal title="Process Return" onClose={resetReturnState}>
