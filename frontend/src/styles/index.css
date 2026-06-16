@@ -234,7 +234,6 @@ body { background: #f5f7fb; color: #0f172a; }
     display: none !important;
   }
 
-  body * { visibility: hidden !important; }
   main > .fixed {
     position: static !important;
     inset: auto !important;
@@ -272,8 +271,8 @@ body { background: #f5f7fb; color: #0f172a; }
     padding: 0 !important;
     overflow: visible !important;
   }
-  #receipt-print, #receipt-print * { visibility: visible !important; }
   #receipt-print {
+    display: block !important;
     position: static !important;
     width: 74mm !important;
     max-width: 74mm !important;
