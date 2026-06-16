@@ -65,6 +65,16 @@ export default function Layout({ title, subtitle, children, wide = false }) {
               </Link>
             </div>
           )}
+          {user?.role === 'sales' && (
+            <div className="flex gap-2">
+              <Link to="/sales" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Store size={16}/>Counter
+              </Link>
+              <Link to="/sales/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                <Package size={16}/>Orders
+              </Link>
+            </div>
+          )}
           {user && <button
             type="button"
             onClick={() => {
@@ -138,8 +148,8 @@ export default function Layout({ title, subtitle, children, wide = false }) {
             ))}
           </div>}
         </div>
-        {user?.role === 'admin' && <div className="border-t p-4">
-          <Link to="/admin/purchase-orders" onClick={() => setNotificationOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-dark px-4 py-3 font-semibold text-white">
+        {user && <div className="border-t p-4">
+          <Link to={user.role === 'admin' ? '/admin/purchase-orders' : '/sales/purchase-orders'} onClick={() => setNotificationOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-dark px-4 py-3 font-semibold text-white">
             <PackagePlus size={18} />
             Open Orders
           </Link>
