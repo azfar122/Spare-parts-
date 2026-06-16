@@ -271,6 +271,9 @@ body { background: #f5f7fb; color: #0f172a; }
     padding: 0 !important;
     overflow: visible !important;
   }
+  .receipt-screen-content {
+    display: none !important;
+  }
   #receipt-print {
     display: block !important;
     position: static !important;
@@ -294,10 +297,11 @@ body { background: #f5f7fb; color: #0f172a; }
     page-break-inside: avoid;
   }
   .receipt-print-only {
+    display: block !important;
     position: static !important;
     left: auto !important;
     top: auto !important;
-    width: auto !important;
+    width: 74mm !important;
     height: auto !important;
     overflow: visible !important;
   }

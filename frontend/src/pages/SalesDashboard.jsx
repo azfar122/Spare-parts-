@@ -509,8 +509,10 @@ export default function SalesDashboard() {
     </div>
     
     {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)} fillViewport>
-      <ShopReceipt receipt={receipt} />
-      <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
+      <div className="receipt-screen-content">
+        <ShopReceipt receipt={receipt} />
+        <button onClick={()=>window.print()} className="no-print mt-4 w-full rounded-xl bg-brand-dark text-white py-3">Print Receipt</button>
+      </div>
     </Modal>}
     
     {returnForm && <Modal title="Process Return" onClose={resetReturnState}>
