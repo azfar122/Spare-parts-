@@ -122,7 +122,7 @@ export default function WarehouseStock() {
 
       <section className="min-w-0 rounded-3xl border bg-white shadow-soft">
         {!selectedWarehouse ? <div className="grid min-h-[520px] place-items-center p-8 text-center text-slate-500">Add or select a warehouse to manage stock.</div> : <>
-          <div className="border-b p-6">
+          <div className="border-b p-4 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="text-2xl font-bold">{selectedWarehouse.name}</h3>
@@ -133,12 +133,12 @@ export default function WarehouseStock() {
                 <p className="text-xl font-bold text-brand-red">{total.toLocaleString()}</p>
               </div>
             </div>
-            <form onSubmit={e => { e.preventDefault(); loadStock(1); }} className="mt-5 flex gap-3">
+            <form onSubmit={e => { e.preventDefault(); loadStock(1); }} className="mt-5 flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product name, part no, brand, category or type" className="w-full rounded-xl border py-3 pl-9 pr-3" />
               </div>
-              <button className="rounded-xl border px-4"><RefreshCw size={18}/></button>
+              <button className="inline-flex items-center justify-center rounded-xl border px-4 py-3 sm:py-0"><RefreshCw size={18}/></button>
             </form>
           </div>
           <div className="max-h-[640px] max-w-full overflow-auto">

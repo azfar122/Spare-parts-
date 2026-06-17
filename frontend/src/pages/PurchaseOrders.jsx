@@ -131,10 +131,10 @@ export default function PurchaseOrders({
 
   return <Layout title={title} subtitle={subtitle}>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <button onClick={() => setShowForm(true)} className="mb-6 rounded-xl bg-brand-red text-white px-6 py-3 font-bold flex items-center gap-2"><Plus size={20}/>New Order</button>
+    <button onClick={() => setShowForm(true)} className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-red px-6 py-3 font-bold text-white sm:w-auto"><Plus size={20}/>New Order</button>
 
-    {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="rounded-3xl bg-white shadow-soft border overflow-x-auto mb-6">
-      <table className="w-full text-sm">
+    {loadingOrders ? <LoadingState label="Loading purchase orders..." /> : orders.length > 0 && <div className="mb-6 max-w-full overflow-x-auto rounded-3xl bg-white shadow-soft border">
+      <table className="w-full min-w-[820px] text-sm">
         <thead className="bg-slate-50"><tr><th className="p-4 text-left">Order #</th><th className="p-4 text-left">Date</th><th className="p-4 text-left">Created By</th><th className="p-4 text-right">Total Price</th><th className="p-4 text-right">Items</th><th className="p-4 text-left">Status</th><th className="p-4 text-center">Action</th></tr></thead>
         <tbody>
           {orders.map(o => <tr key={o._id} className="border-t hover:bg-slate-50"><td className="p-4 font-semibold">{o.orderNumber}</td><td className="p-4 text-sm">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td><td className="p-4 font-medium text-slate-700">{getCreatorName(o)}</td><td className="p-4 text-right">Rs {Number(o.totalPrice).toLocaleString()}</td><td className="p-4 text-right">{o.items.length}</td><td className="p-4">{getStatusBadge(o.status)}</td><td className="p-4 text-center"><button onClick={() => setSelectedOrder(o)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td></tr>)}
@@ -143,10 +143,10 @@ export default function PurchaseOrders({
     </div>}
     {!loadingOrders && orders.length === 0 && <div className="rounded-3xl bg-white shadow-soft border p-8 text-center text-slate-500">No purchase orders found</div>}
 
-    {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
-      <button onClick={() => loadOrders(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40"><ChevronLeft size={16}/>Prev</button>
+    {totalPages > 1 && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <button onClick={() => loadOrders(page - 1)} disabled={page === 1} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40"><ChevronLeft size={16}/>Prev</button>
       <span className="text-sm">Page {page} of {totalPages}</span>
-      <button onClick={() => loadOrders(page + 1)} disabled={page === totalPages} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40">Next<ChevronRight size={16}/></button>
+      <button onClick={() => loadOrders(page + 1)} disabled={page === totalPages} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40">Next<ChevronRight size={16}/></button>
     </div>}
 
     {showForm && <Modal title="Create Purchase Order" onClose={() => setShowForm(false)}>
@@ -208,7 +208,7 @@ export default function PurchaseOrders({
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
                   <label className="text-xs font-medium text-slate-700">Code (optional)</label>
                   <input value={item.partCode} onChange={e => { const newItems = [...formData.items]; newItems[idx].partCode = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="ABC-123" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
@@ -254,7 +254,7 @@ export default function PurchaseOrders({
         <div className="border-t pt-4"><p className="font-bold mb-3">Items</p>
           {selectedOrder.items.map((item, idx) => (
             <div key={idx} className="mb-3 p-3 bg-slate-50 rounded-lg text-sm">
-              <div className="flex justify-between items-start mb-2">
+              <div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between mb-2">
                 <div>
                   <p className="font-semibold">{item.partName}</p>
                   <p className="text-xs text-slate-500">{[item.partCode, item.brand || item.model || '-'].filter(Boolean).join(' • ')}</p>

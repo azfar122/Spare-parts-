@@ -428,13 +428,13 @@ export default function SalesDashboard() {
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
-        <div className="mb-5 flex min-w-0 flex-wrap gap-3 xl:flex-nowrap">
+        <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row xl:flex-nowrap">
           <div className="flex-1 relative">
             <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
           </div>
-          <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
-          <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6">Return</button>
+          <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark px-6 py-3 text-white sm:py-0">Search</button>
+          <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6 py-3 sm:py-0">Return</button>
         </div>
         {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match for "{q}", showing relevant results:</div>}
         {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
@@ -454,7 +454,7 @@ export default function SalesDashboard() {
           showBookingPrice={showBookingPrice}
           onToggleBookingPrice={() => setShowBookingPrice(value => !value)}
         />}
-        {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
+        {totalPages > 1 && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
           <div className="flex items-center gap-2">
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -469,7 +469,7 @@ export default function SalesDashboard() {
           <button onClick={() => load(page + 1)} disabled={page === totalPages} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">Next<ChevronRight size={16}/></button>
         </div>}
       </div>
-      <aside className="w-full rounded-3xl bg-white p-4 shadow-soft border h-fit sticky top-5">
+      <aside className="w-full rounded-3xl bg-white p-4 shadow-soft border h-fit lg:sticky lg:top-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold">Current Bill</h3>
           {cart.length > 0 && <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>}
@@ -493,7 +493,7 @@ export default function SalesDashboard() {
             </button>
             <div className="font-semibold break-words">{i.partName}</div>
             <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · {warehouseSummary(i)}</div>
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className="grid grid-cols-1 gap-2 mt-3 min-[380px]:grid-cols-3">
               <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={Number(i.stock || 0) + Number(i.warehouseQuantity || 0)} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>updateCartQty(idx,e.target.value,i)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Price</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Discount</label><input ref={node => { cartFieldRefs.current[`${idx}-discount`] = node; }} value={i.discount} onFocus={() => setSelectedCart({ row: idx, field: 'discount' })} onKeyDown={e => handleCartKeyDown(e, idx, 'discount')} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
@@ -544,7 +544,7 @@ export default function SalesDashboard() {
             </div>}
             <div>
               <label className="text-xs font-semibold text-slate-600">Payment</label>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mt-2 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
                 {[
                   ['paid', 'Received'],
                   ['unpaid', 'Not Received'],
@@ -574,7 +574,7 @@ export default function SalesDashboard() {
           <p className="mt-1 text-sm text-slate-500">
             {saleModalProduct.partCode || '-'} · Main {Number(saleModalProduct.quantity || 0).toLocaleString()} · {warehouseSummary(saleModalProduct)}
           </p>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
             <div className="rounded-xl bg-white p-3">
               <p className="text-xs font-semibold text-slate-500">Retail Price</p>
               <p className="font-bold text-slate-900">Rs {Number(saleModalProduct.mrp || 0).toLocaleString()}</p>
@@ -625,7 +625,7 @@ export default function SalesDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl bg-brand-dark p-4 text-white">
+        <div className="flex flex-col gap-1 rounded-2xl bg-brand-dark p-4 text-white min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between">
           <span className="font-semibold">Line Total</span>
           <span className="text-2xl font-bold">
             Rs {Math.max(0, Number(saleDraft.qty || 0) * Number(saleDraft.price || 0) - Number(saleDraft.discount || 0)).toLocaleString()}
@@ -638,7 +638,7 @@ export default function SalesDashboard() {
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button type="submit" className="flex-1 rounded-xl bg-brand-red py-3 font-bold text-white">
             Add to Bill
           </button>
@@ -663,12 +663,12 @@ export default function SalesDashboard() {
       <div className="grid gap-4">
         <form onSubmit={lookupReturnBill} className="grid gap-3">
           <label className="text-sm font-medium">Bill Number</label>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
               <input value={returnBillNo} onChange={e=>setReturnBillNo(e.target.value)} placeholder="Enter bill number..." className="w-full rounded-xl border p-3 pr-10" />
               {returnBillNo && <button type="button" onClick={() => { setReturnBillNo(''); setReturnBill(null); setReturnItems({}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
             </div>
-            <button type="submit" disabled={returnLookupLoading} className="rounded-xl bg-brand-dark px-5 text-white font-semibold disabled:cursor-not-allowed disabled:opacity-70 flex items-center gap-2">
+            <button type="submit" disabled={returnLookupLoading} className="flex items-center justify-center gap-2 rounded-xl bg-brand-dark px-5 py-3 text-white font-semibold disabled:cursor-not-allowed disabled:opacity-70 sm:py-0">
               {returnLookupLoading && <ButtonSpinner />}
               {returnLookupLoading ? 'Fetching...' : 'Fetch Bill'}
             </button>
@@ -690,8 +690,8 @@ export default function SalesDashboard() {
               <div><p className="text-slate-500">Total</p><p className="font-bold">Rs {Number(returnBill.grandTotal || 0).toLocaleString()}</p></div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full text-sm">
+            <div className="max-w-full overflow-x-auto rounded-xl border">
+              <table className="w-full min-w-[920px] text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
                     <th className="p-3 font-semibold">Return</th>

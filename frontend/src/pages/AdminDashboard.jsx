@@ -237,20 +237,20 @@ export default function AdminDashboard() {
 
   return <Layout title="Admin Inventory" subtitle="Manage products, prices, quantity and product details." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <div className="mb-5 flex gap-3 border-b">
+    <div className="mb-5 flex gap-3 overflow-x-auto border-b">
       <button onClick={() => setTab('inventory')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'inventory' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Inventory</button>
       <button onClick={() => setTab('returns')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'returns' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Returns</button>
       <button onClick={() => setTab('users')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'users' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Users</button>
     </div>
 
     {tab === 'inventory' && <>
-      <div className="mb-5 flex gap-3">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
         <div className="flex-1 relative">
           <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(1)} placeholder="Search by product name, part no, brand, category or type" className="w-full rounded-2xl border p-4 shadow-sm" />
           {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
         </div>
-        <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark text-white px-6">Search</button>
-        <button onClick={() => setShowAddProduct(true)} className="rounded-2xl bg-brand-red text-white px-6 flex items-center gap-2"><Plus size={18}/>Add Product</button>
+        <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark px-6 py-3 text-white sm:py-0">Search</button>
+        <button onClick={() => setShowAddProduct(true)} className="flex items-center justify-center gap-2 rounded-2xl bg-brand-red px-6 py-3 text-white sm:py-0"><Plus size={18}/>Add Product</button>
       </div>
       {!loadingProducts && q && !hasExactMatch && products.length > 0 && <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">No exact match found for "{q}", but showing relevant results:</div>}
       {!loadingProducts && q && products.length === 0 && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">No products found matching "{q}". Try a different search term.</div>}
@@ -273,7 +273,7 @@ export default function AdminDashboard() {
         onToggleBookingPrice={() => setShowBookingPrice(value => !value)}
       />}
       
-      {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
+      {totalPages > 1 && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
         <div className="flex items-center gap-2">
           {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -290,13 +290,13 @@ export default function AdminDashboard() {
     </>}
 
     {tab === 'returns' && <>
-      <div className="rounded-3xl bg-white shadow-soft overflow-hidden">
+      <div className="max-w-full overflow-hidden rounded-3xl bg-white shadow-soft">
         {loadingReturns ? (
           <LoadingState label="Loading returns..." />
         ) : returns.length === 0 ? (
           <div className="p-8 text-center text-slate-500">No returns found</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="max-w-full overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b bg-slate-50">
                 <th className="px-4 py-3 text-left font-semibold">Date</th>
@@ -323,18 +323,18 @@ export default function AdminDashboard() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </>}
 
-    {tab === 'users' && <div className="rounded-3xl bg-white shadow-soft overflow-hidden">
+    {tab === 'users' && <div className="max-w-full overflow-hidden rounded-3xl bg-white shadow-soft">
       {loadingUsers ? (
         <LoadingState label="Loading users..." />
       ) : users.length === 0 ? (
         <div className="p-8 text-center text-slate-500">No users found</div>
       ) : (
-        <table className="w-full text-sm">
+        <div className="max-w-full overflow-x-auto"><table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b bg-slate-50 text-slate-500">
               <th className="px-4 py-3 text-left font-semibold">Name</th>
@@ -368,12 +368,12 @@ export default function AdminDashboard() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>}
 
-    {selected && <Modal title="Product Details" onClose={()=>setSelected(null)}><div className="grid grid-cols-2 gap-4 text-sm">{Object.entries(selected).filter(([k])=> ((!k.startsWith('_') || k==='_id') && !['CCP', 'CP', 'Customer price (cc)', 'Customer Price'].includes(k))).map(([k,v])=><div key={k} className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">{k}</p><p className="font-semibold break-all">{String(v)}</p></div>)}</div></Modal>}
-    {editing && <Modal title="Edit Product" onClose={()=>setEditing(null)}><form onSubmit={saveEdit} className="grid grid-cols-2 gap-4">
+    {selected && <Modal title="Product Details" onClose={()=>setSelected(null)}><div className="grid gap-4 text-sm sm:grid-cols-2">{Object.entries(selected).filter(([k])=> ((!k.startsWith('_') || k==='_id') && !['CCP', 'CP', 'Customer price (cc)', 'Customer Price'].includes(k))).map(([k,v])=><div key={k} className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">{k}</p><p className="font-semibold break-all">{String(v)}</p></div>)}</div></Modal>}
+    {editing && <Modal title="Edit Product" onClose={()=>setEditing(null)}><form onSubmit={saveEdit} className="grid gap-4 sm:grid-cols-2">
       <label className="text-sm font-medium">Product name<input name="partName" defaultValue={editing.partName} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Part No<input name="partCode" defaultValue={editing.partCode} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Brand<input name="brand" defaultValue={editing.brand || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
@@ -384,15 +384,15 @@ export default function AdminDashboard() {
       <label className="text-sm font-medium">Stock Qty<input name="quantity" type="number" min="0" defaultValue={editing.quantity} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Min Order Qty<input name="minOrderQty" type="number" min="1" defaultValue={editing.minOrderQty} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Minimum Qty<input name="minimumQuantity" type="number" min="0" defaultValue={editing.minimumQuantity || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <label className="col-span-2 text-sm font-medium">description<textarea name="description" defaultValue={editing.description} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <button disabled={savingEdit} className="col-span-2 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+      <label className="text-sm font-medium sm:col-span-2">description<textarea name="description" defaultValue={editing.description} className="mt-1 w-full rounded-xl border p-3" /></label>
+      <button disabled={savingEdit} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2 sm:col-span-2">
         {savingEdit && <ButtonSpinner />}
         {savingEdit ? 'Saving...' : 'Save Changes'}
       </button>
     </form></Modal>}
     {showAddProduct && <Modal title="Add New Product" onClose={()=>setShowAddProduct(false)}><form onSubmit={handleAddProduct} className="grid gap-4">
-      <div className="grid grid-cols-2 gap-4">
-        <label className="text-sm font-medium col-span-2">Product name <span className="text-red-500">*</span><input name="partName" placeholder="e.g., Engine Oil" className="mt-1 w-full rounded-xl border p-3" required /></label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-sm font-medium sm:col-span-2">Product name <span className="text-red-500">*</span><input name="partName" placeholder="e.g., Engine Oil" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">Part No <span className="text-red-500">*</span><input name="partCode" placeholder="e.g., OIL-001" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">Brand<input name="brand" placeholder="e.g., Honda" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Category<input name="category" placeholder="e.g., Engine" className="mt-1 w-full rounded-xl border p-3" /></label>
@@ -404,7 +404,7 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium">Minimum Qty <span className="text-slate-400">(optional)</span><input name="minimumQuantity" type="number" placeholder="e.g., 10" className="mt-1 w-full rounded-xl border p-3" min="0" /></label>
       </div>
       <label className="text-sm font-medium">Description<textarea name="description" placeholder="Product description..." className="mt-1 w-full rounded-xl border p-3" rows="3" /></label>
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <button type="submit" disabled={addingProduct} className="flex-1 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
           {addingProduct && <ButtonSpinner />}
           {addingProduct ? 'Adding...' : 'Add Product'}

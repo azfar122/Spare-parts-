@@ -2,7 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-body { background: #f5f7fb; color: #0f172a; }
+html { max-width: 100%; overflow-x: hidden; }
+body { max-width: 100%; overflow-x: hidden; background: #f5f7fb; color: #0f172a; }
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
 
 .shop-receipt {
   width: 80mm;

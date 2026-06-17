@@ -143,7 +143,7 @@ export default function SalesAnalytics() {
   const totalPages = Math.ceil(total / limit);
 
   return <Layout title="Sales Analytics" subtitle="View and search all sales transactions by date and product.">
-    <div className="rounded-3xl bg-white p-6 shadow-soft border mb-6">
+    <div className="rounded-3xl bg-white p-4 shadow-soft border mb-6 sm:p-6">
       <h3 className="font-bold text-lg mb-4">Filters</h3>
       <form onSubmit={handleSearch}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -219,8 +219,8 @@ export default function SalesAnalytics() {
       </div>
     </div>}
 
-    <div className="rounded-3xl bg-white shadow-soft border overflow-hidden">
-      {loading ? <LoadingState label="Loading sales..." /> : <table className="w-full text-sm">
+    <div className="max-w-full overflow-hidden rounded-3xl bg-white shadow-soft border">
+      {loading ? <LoadingState label="Loading sales..." /> : <div className="max-w-full overflow-x-auto"><table className="w-full min-w-[1200px] text-sm">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
             <th className="p-4 text-left">Receipt #</th>
@@ -265,11 +265,11 @@ export default function SalesAnalytics() {
             </tr>
           ))}
         </tbody>
-      </table>}
+      </table></div>}
       {!loading && sales.length === 0 && !searchPrompt && <div className="text-center py-8 text-slate-500">No sales found</div>}
     </div>
 
-    {totalPages > 1 && <div className="mt-6 flex items-center justify-center gap-3">
+    {totalPages > 1 && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
       <button onClick={() => load(page - 1)} disabled={page === 1} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"><ChevronLeft size={16}/>Previous</button>
       <div className="flex items-center gap-2">
         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -286,7 +286,7 @@ export default function SalesAnalytics() {
 
     {selectedSale && <Modal title={`Receipt ${selectedSale.receiptNo}`} onClose={() => setSelectedSale(null)}>
       <div className="receipt-screen-content space-y-4 text-sm">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <div><p className="text-slate-500">Date</p><p className="font-semibold">{new Date(selectedSale.createdAt).toLocaleString('en-IN')}</p></div>
           <div><p className="text-slate-500">Customer</p><p className="font-semibold">{selectedSale.customerName}</p></div>
           <div><p className="text-slate-500">Sold By</p><p className="font-semibold">{selectedSale.soldBy?.name || selectedSale.soldBy?.username || '-'}</p></div>
@@ -301,14 +301,14 @@ export default function SalesAnalytics() {
           <div className="space-y-2">
             {selectedSale.items.map((item, idx) => (
               <div key={idx} className={`p-3 rounded-lg ${selectedSale.matchedItems?.some(matched => String(matched.product) === String(item.product)) ? 'bg-red-50 ring-1 ring-brand-red/20' : 'bg-slate-50'}`}>
-                <div className="flex justify-between"><span className="font-semibold">{item.partName}</span><span>Net {Number(item.netQty ?? item.qty).toLocaleString()}x</span></div>
+                <div className="flex flex-col gap-1 min-[380px]:flex-row min-[380px]:justify-between"><span className="font-semibold">{item.partName}</span><span>Net {Number(item.netQty ?? item.qty).toLocaleString()}x</span></div>
                 <div className="text-xs text-slate-500">{item.partCode} · {item.model}</div>
-                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">
+                <div className="mt-2 grid gap-2 rounded-lg bg-white p-2 text-xs text-slate-600 sm:grid-cols-3">
                   <span>Sold: <b>{Number(item.qty || 0).toLocaleString()}</b></span>
                   <span>Returned: <b>{Number(item.returnedQty || 0).toLocaleString()}</b></span>
                   <span>Refunded: <b>Rs {Number(item.refunded || 0).toLocaleString()}</b></span>
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white p-2 text-xs text-slate-600">
+                <div className="mt-2 grid gap-2 rounded-lg bg-white p-2 text-xs text-slate-600 sm:grid-cols-3">
                   <span>Main used: <b>{Number(item.inventoryQtyUsed ?? item.qty)}</b></span>
                   <span>Warehouse used: <b>{Number(item.warehouseQtyUsed || 0)}</b></span>
                   <span>Warehouse: <b>{item.warehouseName || '-'}</b></span>

@@ -26,7 +26,7 @@ export default function ConfirmModal({
           <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
         </div>
       </div>
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           type="button"
           disabled={busy}

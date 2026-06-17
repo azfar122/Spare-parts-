@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { AlertTriangle, Bell, BookOpen, Building2, LogOut, ShieldCheck, Store, BarChart3, Package, PackagePlus, X } from 'lucide-react';
+import { AlertTriangle, Bell, BookOpen, Building2, LogOut, Menu, ShieldCheck, Store, BarChart3, Package, PackagePlus, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
@@ -10,6 +10,7 @@ export default function Layout({ title, subtitle, children, wide = false }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lowStockItems, setLowStockItems] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
@@ -38,43 +39,47 @@ export default function Layout({ title, subtitle, children, wide = false }) {
     return () => socket.disconnect();
   }, [user]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setNotificationOpen(false);
+  }, [location.pathname]);
+
+  const adminLinks = [
+    { to: '/admin', label: 'Inventory', icon: Store },
+    { to: '/admin/sales', label: 'Sales', icon: BarChart3 },
+    { to: '/admin/customers', label: 'Khata', icon: BookOpen },
+    { to: '/admin/warehouses', label: 'Warehouse', icon: Building2 },
+    { to: '/admin/purchase-orders', label: 'Orders', icon: Package }
+  ];
+  const salesLinks = [
+    { to: '/sales', label: 'Counter', icon: Store },
+    { to: '/sales/purchase-orders', label: 'Orders', icon: Package }
+  ];
+  const navLinks = user?.role === 'admin' ? adminLinks : user?.role === 'sales' ? salesLinks : [];
+
+  function NavItems({ mobile = false }) {
+    return navLinks.map(({ to, label, icon: Icon }) => (
+      <Link
+        key={to}
+        to={to}
+        className={`${mobile ? 'w-full px-4 py-3' : 'px-4 py-2'} rounded-lg text-sm font-medium flex items-center gap-2 transition ${location.pathname === to ? 'bg-white/20' : 'hover:bg-white/10'}`}
+      >
+        <Icon size={16}/>{label}
+      </Link>
+    ));
+  }
+
   return <div className="min-h-screen overflow-x-hidden">
     <div className="w-full bg-brand-dark text-white">
-      <div className="mx-auto flex max-w-[calc(100vw-3rem)] items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          <img src={logo} alt="Asif Auto Traders" className="h-14 w-20 rounded-xl bg-white object-contain p-1.5 shadow-soft" />
-          <div><h1 className="text-xl font-bold">Asif Auto Traders</h1><p className="text-sm text-slate-300">Inventory, sales receipts and returns</p></div>
+      <div className="mx-auto flex w-full max-w-[calc(100vw-1rem)] items-center justify-between gap-3 px-3 py-3 sm:max-w-[calc(100vw-3rem)] sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src={logo} alt="Asif Auto Traders" className="h-12 w-16 shrink-0 rounded-xl bg-white object-contain p-1.5 shadow-soft sm:h-14 sm:w-20" />
+          <div className="min-w-0"><h1 className="truncate text-base font-bold sm:text-xl">Asif Auto Traders</h1><p className="hidden text-sm text-slate-300 sm:block">Inventory, sales receipts and returns</p></div>
         </div>
-        <div className="ml-auto flex items-center gap-4">
-          {user?.role === 'admin' && (
-            <div className="flex gap-2">
-              <Link to="/admin" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <Store size={16}/>Inventory
-              </Link>
-              <Link to="/admin/sales" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/sales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <BarChart3 size={16}/>Sales
-              </Link>
-              <Link to="/admin/customers" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/customers' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <BookOpen size={16}/>Khata
-              </Link>
-              <Link to="/admin/warehouses" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/warehouses' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <Building2 size={16}/>Warehouse
-              </Link>
-              <Link to="/admin/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/admin/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <Package size={16}/>Orders
-              </Link>
-            </div>
-          )}
-          {user?.role === 'sales' && (
-            <div className="flex gap-2">
-              <Link to="/sales" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <Store size={16}/>Counter
-              </Link>
-              <Link to="/sales/purchase-orders" className={`rounded-lg px-4 py-2 text-sm font-medium flex items-center gap-2 transition ${location.pathname === '/sales/purchase-orders' ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                <Package size={16}/>Orders
-              </Link>
-            </div>
-          )}
+        <div className="ml-auto flex items-center gap-2 sm:gap-4">
+          <div className="hidden gap-2 lg:flex">
+            <NavItems />
+          </div>
           {user && <button
             type="button"
             onClick={() => {
@@ -87,11 +92,28 @@ export default function Layout({ title, subtitle, children, wide = false }) {
             <Bell size={18} />
             {lowStockItems.length > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brand-red px-1 text-[11px] font-bold text-white">{lowStockItems.length}</span>}
           </button>}
-          <span className="text-sm bg-white/10 px-3 py-2 rounded-full flex items-center gap-2"><ShieldCheck size={16}/>{user?.role}</span>
-          <button onClick={logout} className="no-print rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-sm flex gap-2"><LogOut size={16}/>Logout</button>
+          <span className="hidden text-sm bg-white/10 px-3 py-2 rounded-full items-center gap-2 sm:flex"><ShieldCheck size={16}/>{user?.role}</span>
+          <button onClick={logout} className="no-print hidden rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-sm gap-2 sm:flex"><LogOut size={16}/>Logout</button>
+          {user && <button type="button" onClick={() => setMobileMenuOpen(true)} className="no-print rounded-xl bg-white/10 p-2.5 hover:bg-white/20 lg:hidden" aria-label="Open menu"><Menu size={20}/></button>}
         </div>
       </div>
     </div>
+    {mobileMenuOpen && <div className="no-print fixed inset-0 z-[75] lg:hidden">
+      <button type="button" className="absolute inset-0 bg-slate-950/50" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" />
+      <aside className="absolute right-0 top-0 flex h-full w-[min(340px,88vw)] flex-col bg-brand-dark p-4 text-white shadow-2xl">
+        <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="min-w-0">
+            <p className="truncate font-bold">Asif Auto Traders</p>
+            <p className="text-sm capitalize text-slate-300">{user?.role}</p>
+          </div>
+          <button type="button" onClick={() => setMobileMenuOpen(false)} className="rounded-xl bg-white/10 p-2" aria-label="Close menu"><X size={18}/></button>
+        </div>
+        <nav className="grid gap-2">
+          <NavItems mobile />
+        </nav>
+        <button onClick={logout} className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/20"><LogOut size={16}/>Logout</button>
+      </aside>
+    </div>}
     {notificationOpen && <div className="no-print fixed inset-0 z-[80]">
       <button type="button" className="absolute inset-0 bg-slate-950/40" onClick={() => setNotificationOpen(false)} aria-label="Close notifications" />
       <aside className="absolute right-0 top-0 flex h-full w-[min(420px,100vw)] flex-col bg-white shadow-2xl">
@@ -156,8 +178,8 @@ export default function Layout({ title, subtitle, children, wide = false }) {
         </div>}
       </aside>
     </div>}
-    <main className={`mx-auto px-6 py-8 ${wide ? 'max-w-[calc(100vw-3rem)]' : 'max-w-7xl'}`}>
-      <div className="mb-7"><h2 className="text-3xl font-bold tracking-tight">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
+    <main className={`mx-auto w-full px-3 py-5 sm:px-6 sm:py-8 ${wide ? 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-3rem)]' : 'max-w-7xl'}`}>
+      <div className="mb-5 sm:mb-7"><h2 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
       {children}
     </main>
   </div>;

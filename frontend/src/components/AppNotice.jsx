@@ -4,7 +4,7 @@ export default function AppNotice({ notice, onClose }) {
   if (!notice) return null;
 
   const isSuccess = notice.type === 'success';
-  return <div className="fixed right-6 top-6 z-[70] w-[min(420px,calc(100vw-3rem))] rounded-2xl border bg-white p-4 shadow-soft">
+  return <div className="fixed right-3 top-3 z-[70] w-[min(420px,calc(100vw-1.5rem))] rounded-2xl border bg-white p-4 shadow-soft sm:right-6 sm:top-6 sm:w-[min(420px,calc(100vw-3rem))]">
     <div className="flex items-start gap-3">
       <div className={`mt-0.5 ${isSuccess ? 'text-emerald-600' : 'text-red-600'}`}>
         {isSuccess ? <CheckCircle size={22} /> : <AlertCircle size={22} />}

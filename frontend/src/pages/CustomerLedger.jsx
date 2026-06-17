@@ -132,7 +132,7 @@ export default function CustomerLedger() {
 
   return <Layout title="Khata / Customer Ledger" subtitle="Manage customer balances, payments, bills, and manual adjustments.">
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <div className="grid lg:grid-cols-[360px_1fr] gap-6">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="rounded-3xl bg-white border shadow-soft overflow-hidden">
         <div className="p-5 border-b">
           <div className="flex items-center justify-between gap-3">
@@ -166,7 +166,7 @@ export default function CustomerLedger() {
         </div>
       </aside>
 
-      <section className="rounded-3xl bg-white border shadow-soft overflow-hidden">
+      <section className="min-w-0 rounded-3xl bg-white border shadow-soft overflow-hidden">
         {!detail ? <div className="min-h-[520px] grid place-items-center text-center p-8">
           <div>
             <BookOpen size={42} className="mx-auto text-slate-400" />
@@ -180,11 +180,11 @@ export default function CustomerLedger() {
               <p className="text-slate-500">{detail.customer.phone || 'No phone'}{detail.customer.address ? ` · ${detail.customer.address}` : ''}</p>
               {detail.customer.notes && <p className="text-sm text-slate-500 mt-2">{detail.customer.notes}</p>}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => openEdit(detail.customer)} className="rounded-xl border px-4 py-2 inline-flex items-center gap-2"><Edit size={16}/>Edit</button>
-              <button onClick={() => setEntryMode('payment')} className="rounded-xl bg-emerald-600 text-white px-4 py-2 inline-flex items-center gap-2"><Wallet size={16}/>Payment</button>
-              <button onClick={() => setEntryMode('adjustment')} className="rounded-xl bg-brand-dark text-white px-4 py-2">Adjustment</button>
-              <button onClick={() => requestDeleteCustomer(detail.customer)} disabled={deletingCustomerId === detail.customer._id} className="rounded-xl border border-red-200 px-4 py-2 text-red-600 inline-flex items-center gap-2 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16}/>{deletingCustomerId === detail.customer._id ? 'Deleting...' : 'Delete'}</button>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+              <button onClick={() => openEdit(detail.customer)} className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2"><Edit size={16}/>Edit</button>
+              <button onClick={() => setEntryMode('payment')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-white"><Wallet size={16}/>Payment</button>
+              <button onClick={() => setEntryMode('adjustment')} className="rounded-xl bg-brand-dark px-4 py-2 text-white">Adjustment</button>
+              <button onClick={() => requestDeleteCustomer(detail.customer)} disabled={deletingCustomerId === detail.customer._id} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16}/>{deletingCustomerId === detail.customer._id ? 'Deleting...' : 'Delete'}</button>
             </div>
           </div>
           <div className="grid md:grid-cols-4 gap-4 p-6 border-b">
@@ -193,8 +193,8 @@ export default function CustomerLedger() {
             <div className="rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Opening</p><p className="text-xl font-bold">{money(detail.customer.openingBalance)}</p></div>
             <div className="rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Entries</p><p className="text-xl font-bold">{detail.ledger.length}</p></div>
           </div>
-          <div className="max-h-[520px] overflow-auto">
-            <table className="w-full text-sm">
+          <div className="max-h-[520px] max-w-full overflow-auto">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="sticky top-0 bg-slate-50 text-slate-500">
                 <tr><th className="p-4 text-left">Date</th><th className="p-4 text-left">Type</th><th className="p-4 text-left">Description</th><th className="p-4 text-right">Debit</th><th className="p-4 text-right">Credit</th><th className="p-4 text-right">Balance</th></tr>
               </thead>

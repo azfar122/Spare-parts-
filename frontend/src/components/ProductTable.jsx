@@ -44,7 +44,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
   }
 
   if (!salesMode) {
-    return <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-soft">
+    return <div className="max-w-full overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-soft">
       {onToggleBookingPrice && <div className="flex justify-end border-b bg-white px-4 py-3">
         <button
           type="button"
@@ -56,8 +56,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
           Booking Price
         </button>
       </div>}
-      <div>
-        <table className="w-full table-fixed text-xs">
+      <div className="max-w-full overflow-x-auto">
+        <table className="w-full min-w-[1180px] table-fixed text-xs">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
               <th className="w-[4%] p-3 text-left">Sr No.</th>
@@ -111,7 +111,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
     </div>;
   }
 
-  return <div className="overflow-hidden rounded-3xl bg-white shadow-soft border border-slate-100">
+  return <div className="max-w-full overflow-hidden rounded-3xl bg-white shadow-soft border border-slate-100">
     {onToggleBookingPrice && <div className="flex justify-end border-b bg-white px-3 py-2">
       <button
         type="button"
@@ -123,8 +123,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
         Booking Price
       </button>
     </div>}
-    <div>
-      <table className="w-full table-fixed text-xs">
+    <div className="max-w-full overflow-x-auto">
+      <table className="w-full min-w-[1180px] table-fixed text-xs">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
             <th className="w-[4%] p-3 text-left">Sr No.</th>
