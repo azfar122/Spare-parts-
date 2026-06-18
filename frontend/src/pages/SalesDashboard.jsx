@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, ReceiptText, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -18,11 +18,6 @@ export default function SalesDashboard() {
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const [selectedCart, setSelectedCart] = useState({ row: -1, field: 'qty' });
   const [receipt, setReceipt] = useState(null);
-  const [salesBillsOpen, setSalesBillsOpen] = useState(false);
-  const [salesBills, setSalesBills] = useState([]);
-  const [salesBillSearch, setSalesBillSearch] = useState('');
-  const [salesBillsLoading, setSalesBillsLoading] = useState(false);
-  const [salesBillError, setSalesBillError] = useState('');
   const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [warehouseOptions, setWarehouseOptions] = useState({});
@@ -85,42 +80,6 @@ export default function SalesDashboard() {
   async function loadWarehouses() {
     const r = await api.get('/warehouses');
     setWarehouses(r.data || []);
-  }
-
-  async function loadSalesBills(search = salesBillSearch) {
-    try {
-      setSalesBillsLoading(true);
-      setSalesBillError('');
-      const receiptNo = search.trim();
-      const r = await api.get('/sales', {
-        params: {
-          page: 1,
-          limit: 20,
-          ...(receiptNo ? { receiptNo } : {})
-        }
-      });
-      setSalesBills(r.data.items || []);
-    } catch (err) {
-      setSalesBills([]);
-      setSalesBillError(err.response?.data?.message || err.message);
-    } finally {
-      setSalesBillsLoading(false);
-    }
-  }
-
-  function openSalesBills() {
-    setSalesBillsOpen(true);
-    loadSalesBills('');
-  }
-
-  async function searchSalesBills(e) {
-    e.preventDefault();
-    await loadSalesBills(salesBillSearch);
-  }
-
-  function openReceiptFromSalesBill(bill) {
-    setSalesBillsOpen(false);
-    setReceipt(bill);
   }
 
   useEffect(() => { load(1); }, [q]);
@@ -461,39 +420,12 @@ export default function SalesDashboard() {
     }
   }
 
-  function returnStatusLabel(status) {
-    if (status === 'returned') return 'Returned';
-    if (status === 'partial') return 'Partially Returned';
-    return 'No Return';
-  }
-
-  function returnStatusClass(status) {
-    if (status === 'returned') return 'border-red-200 bg-red-50 text-red-700';
-    if (status === 'partial') return 'border-amber-200 bg-amber-50 text-amber-700';
-    return 'border-slate-200 bg-slate-50 text-slate-600';
-  }
-
   const totalPages = Math.ceil(total / limit);
   const billTotal = totals.sub - totals.dis;
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
 
   return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <button
-        type="button"
-        onClick={openSalesBills}
-        className="flex min-h-32 items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-soft transition hover:-translate-y-0.5 hover:border-brand-red/40 hover:shadow-lg"
-      >
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-red-50 text-brand-red">
-          <ReceiptText size={24} />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-lg font-bold text-slate-900">Sales</span>
-          <span className="mt-1 block text-sm leading-5 text-slate-500">Find your bills, view receipt details, and print again.</span>
-        </span>
-      </button>
-    </div>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
         <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row xl:flex-nowrap">
@@ -717,70 +649,6 @@ export default function SalesDashboard() {
       </form>
     </Modal>}
     
-    {salesBillsOpen && <Modal title="Sales Bills" onClose={() => setSalesBillsOpen(false)} fillViewport>
-      <div className="receipt-screen-content grid gap-5">
-        <form onSubmit={searchSalesBills} className="grid gap-3">
-          <label className="text-sm font-semibold text-slate-700">Bill Number</label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={salesBillSearch}
-                onChange={e => setSalesBillSearch(e.target.value)}
-                placeholder="Search bill number..."
-                className="w-full rounded-xl border py-3 pl-10 pr-10"
-              />
-              {salesBillSearch && <button type="button" onClick={() => { setSalesBillSearch(''); loadSalesBills(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={18}/></button>}
-            </div>
-            <button type="submit" disabled={salesBillsLoading} className="flex items-center justify-center gap-2 rounded-xl bg-brand-dark px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70 sm:py-0">
-              {salesBillsLoading && <ButtonSpinner />}
-              {salesBillsLoading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-        </form>
-
-        {salesBillError && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{salesBillError}</div>}
-
-        <div className="min-w-0 overflow-hidden rounded-2xl border bg-white">
-          {salesBillsLoading ? <LoadingState label="Loading bills..." /> : <div className="max-h-[62dvh] overflow-auto">
-            <table className="w-full min-w-[760px] text-sm">
-              <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="p-3 text-left">Bill</th>
-                  <th className="p-3 text-left">Date</th>
-                  <th className="p-3 text-left">Customer</th>
-                  <th className="p-3 text-right">Items</th>
-                  <th className="p-3 text-right">Total</th>
-                  <th className="p-3 text-left">Return</th>
-                  <th className="p-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salesBills.map(bill => (
-                  <tr key={bill._id} className="border-t hover:bg-slate-50">
-                    <td className="p-3 font-bold text-brand-red">{bill.receiptNo}</td>
-                    <td className="p-3">{new Date(bill.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                    <td className="p-3">{bill.customerName}</td>
-                    <td className="p-3 text-right">{bill.items?.length || 0}</td>
-                    <td className="p-3 text-right font-semibold">Rs {Number(bill.netTotal ?? bill.grandTotal ?? 0).toLocaleString()}</td>
-                    <td className="p-3">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${returnStatusClass(bill.returnStatus)}`}>
-                        {returnStatusLabel(bill.returnStatus)}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <button type="button" onClick={() => openReceiptFromSalesBill(bill)} className="rounded-lg border px-3 py-1 font-semibold hover:bg-slate-100">View</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {salesBills.length === 0 && <div className="p-8 text-center text-sm text-slate-500">No bills found.</div>}
-          </div>}
-        </div>
-      </div>
-    </Modal>}
-
     {receipt && <Modal title="Receipt" onClose={()=>setReceipt(null)} fillViewport>
       <div className="receipt-screen-content">
         <ShopReceipt receipt={receipt} />

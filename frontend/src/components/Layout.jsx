@@ -53,6 +53,7 @@ export default function Layout({ title, subtitle, children, wide = false }) {
   ];
   const salesLinks = [
     { to: '/sales', label: 'Counter', icon: Store },
+    { to: '/sales/bills', label: 'Sales', icon: BarChart3 },
     { to: '/sales/purchase-orders', label: 'Orders', icon: Package }
   ];
   const navLinks = user?.role === 'admin' ? adminLinks : user?.role === 'sales' ? salesLinks : [];

@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Login from './pages/Login.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import SalesDashboard from './pages/SalesDashboard.jsx';
+import SalesBills from './pages/SalesBills.jsx';
 import SalesAnalytics from './pages/SalesAnalytics.jsx';
 import PurchaseOrders from './pages/PurchaseOrders.jsx';
 import CustomerLedger from './pages/CustomerLedger.jsx';
@@ -29,6 +30,7 @@ function App() {
     <Route path="/admin/warehouses" element={<Protected role="admin"><WarehouseStock /></Protected>} />
     <Route path="/admin/purchase-orders" element={<Protected role="admin"><PurchaseOrders /></Protected>} />
     <Route path="/sales" element={<Protected role="sales"><SalesDashboard /></Protected>} />
+    <Route path="/sales/bills" element={<Protected role="sales"><SalesBills /></Protected>} />
     <Route path="/sales/purchase-orders" element={<Protected role="sales"><PurchaseOrders canReceive={false} title="Orders" subtitle="Create manufacturer purchase orders and track their status." /></Protected>} />
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes></AuthProvider></BrowserRouter>;

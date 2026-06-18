@@ -123,25 +123,20 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
         Booking Price
       </button>
     </div>}
-    <div className="max-w-full overflow-x-auto">
-      <table className="w-full min-w-[1180px] table-fixed text-xs">
+    <div className="max-w-full overflow-hidden">
+      <table className="w-full table-fixed text-[11px] sm:text-xs">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
-            <th className="w-[4%] p-3 text-left">Sr No.</th>
-            <th className="w-[21%] p-3 text-left">Product Name</th>
-            <th className="w-[10%] p-3 text-left">Part No</th>
-            <th className="w-[7%] p-3 text-left">Brand</th>
-            <th className="w-[7%] p-3 text-left">Category</th>
-            <th className="w-[6%] p-3 text-left">Type</th>
-            {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
-            <th className="w-[9%] p-3 text-right">Retail Price(RP)</th>
-            <th className="w-[6%] p-3 text-right">Stock Qty</th>
-            <th className="w-[6%] p-3 text-right">Total Qty</th>
-            <th className="w-[6%] p-3 text-right">Min Qty</th>
-            {warehouseColumns.map(warehouse => (
-              <th key={warehouse._id} className="w-[7%] p-3 text-right">{warehouse.name}</th>
-            ))}
-            <th className="w-[6%] p-3 text-right">Action</th>
+            <th className="w-[6%] px-2 py-3 text-left">Sr</th>
+            <th className="w-[23%] px-2 py-3 text-left">Product</th>
+            <th className="w-[12%] px-2 py-3 text-left">Part No</th>
+            <th className="w-[12%] px-2 py-3 text-left">Details</th>
+            {showBookingPrice && <th className="w-[9%] px-2 py-3 text-right">Book</th>}
+            <th className="w-[10%] px-2 py-3 text-right">Retail</th>
+            <th className="w-[7%] px-2 py-3 text-right">Shop</th>
+            <th className="w-[7%] px-2 py-3 text-right">Total</th>
+            <th className="w-[6%] px-2 py-3 text-right">Min</th>
+            <th className="w-[8%] px-2 py-3 text-right">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -156,24 +151,19 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               onKeyDown={e => handleRowKeyDown(e, p, index)}
               className={`border-t outline-none hover:bg-slate-50/70 ${selectedIndex === index ? 'bg-red-50 ring-2 ring-inset ring-brand-red/40' : ''}`}
             >
-              <td className="p-3 font-semibold text-slate-500">{startIndex + index + 1}</td>
-              <td className="p-3 font-semibold break-words">{productName(p)}</td>
-              <td className="p-3 text-slate-600 break-words">{partNo(p)}</td>
-              <td className="p-3 text-slate-600 break-words">{p.brand || '-'}</td>
-              <td className="p-3 text-slate-600 break-words">{p.category || '-'}</td>
-              <td className="p-3 text-slate-600 break-words">{p.type || p.model || '-'}</td>
-              {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
-              <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
-              <td className="p-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
-              <td className={`p-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{availableQty.toLocaleString()}</td>
-              <td className="p-3 text-right">{minimumQty(p).toLocaleString()}</td>
-              {warehouseColumns.map(warehouse => (
-                <td key={warehouse._id} className="p-3 text-right text-slate-600">{warehouseQty(p, warehouse._id).toLocaleString()}</td>
-              ))}
-              <td className="p-3"><div className="flex justify-end gap-2">
+              <td className="px-2 py-3 font-semibold text-slate-500">{startIndex + index + 1}</td>
+              <td className="break-words px-2 py-3 font-semibold leading-snug">{productName(p)}</td>
+              <td className="break-words px-2 py-3 text-slate-600">{partNo(p)}</td>
+              <td className="break-words px-2 py-3 text-slate-600">{[p.brand, p.category, p.type || p.model].filter(Boolean).join(' / ') || '-'}</td>
+              {showBookingPrice && <td className="px-2 py-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
+              <td className="px-2 py-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
+              <td className={`px-2 py-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{availableQty.toLocaleString()}</td>
+              <td className="px-2 py-3 text-right">{minimumQty(p).toLocaleString()}</td>
+              <td className="px-2 py-3"><div className="flex justify-end gap-2">
                 {!salesMode && <button title="View details" className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onDetail(p)}><Eye size={16}/></button>}
                 {onEdit && <button className="rounded-xl border px-3 py-2 hover:bg-slate-100" onClick={() => onEdit(p)}><Pencil size={16}/></button>}
-                {salesMode && <button disabled={availableQty <= 0} className={actionButtonClass(index, 0, 'rounded-xl bg-brand-red px-3 py-2 text-white disabled:opacity-40')} onClick={() => onAddSale(p)}>Sell</button>}
+                {salesMode && <button disabled={availableQty <= 0} className={actionButtonClass(index, 0, 'rounded-lg bg-brand-red px-2 py-2 font-semibold text-white disabled:opacity-40')} onClick={() => onAddSale(p)}>Sell</button>}
               </div></td>
             </tr>;
           })}
