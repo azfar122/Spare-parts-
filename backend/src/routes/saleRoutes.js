@@ -82,7 +82,7 @@ async function attachReturnSummaries(sales) {
   });
 }
 
-router.get('/', requireRole('admin'), async (req, res) => {
+router.get('/', requireRole('sales', 'admin'), async (req, res) => {
   const {
     startDate,
     endDate,
@@ -131,6 +131,7 @@ router.get('/', requireRole('admin'), async (req, res) => {
   }
   if (receiptNo) conditions.push({ receiptNo: new RegExp(escapeRegex(receiptNo), 'i') });
   if (conditions.length) filter.$and = conditions;
+  if (req.user.role === 'sales') filter.soldBy = req.user._id;
 
   const skip = (Number(page) - 1) * Number(limit);
   const [sales, total] = await Promise.all([
