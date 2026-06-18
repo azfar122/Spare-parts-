@@ -45,6 +45,7 @@ export default function SalesDashboard() {
   const [saleModalProduct, setSaleModalProduct] = useState(null);
   const [saleDraft, setSaleDraft] = useState({ qty: '1', price: '', discount: '0' });
   const cartFieldRefs = useRef({});
+  const productSearchRef = useRef(null);
   const saleQtyRef = useRef(null);
 
   async function load(pageNum = 1) {
@@ -152,6 +153,12 @@ export default function SalesDashboard() {
     setSaleDraft({ qty: '1', price: '', discount: '0' });
   }
 
+  function scrollToProductSearch() {
+    window.setTimeout(() => {
+      productSearchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
   function addSale(p, values = {}) {
     const qty = Math.max(1, Number(values.qty ?? 1) || 1);
     const price = Number(values.price ?? p.mrp ?? 0) || 0;
@@ -193,6 +200,7 @@ export default function SalesDashboard() {
     if (qty > availableQty) return setNotice({ type: 'error', title: 'Not Enough Stock', message: `Only ${availableQty.toLocaleString()} pieces are available.` });
     addSale(saleModalProduct, saleDraft);
     closeSaleModal();
+    scrollToProductSearch();
   }
 
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
@@ -428,7 +436,7 @@ export default function SalesDashboard() {
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
-        <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row xl:flex-nowrap">
+        <div ref={productSearchRef} className="mb-5 flex min-w-0 scroll-mt-5 flex-col gap-3 sm:flex-row xl:flex-nowrap">
           <div className="flex-1 relative">
             <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
