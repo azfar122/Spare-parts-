@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ReceiptText, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ProductTable from '../components/ProductTable.jsx';
 import Modal from '../components/Modal.jsx';
@@ -10,6 +10,21 @@ import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 const cartFieldOrder = ['qty', 'price', 'discount'];
+const heldBillsStorageKey = 'salesCounterHeldBills';
+
+function calculateBillTotals(items) {
+  const totals = items.reduce((sum, item) => {
+    sum.sub += Number(item.qty || 0) * Number(item.price || 0);
+    sum.dis += Number(item.discount || 0);
+    return sum;
+  }, { sub: 0, dis: 0 });
+  return { ...totals, total: totals.sub - totals.dis };
+}
+
+function createHeldBillId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `held-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function SalesDashboard() {
   const [products, setProducts] = useState([]);
@@ -44,8 +59,18 @@ export default function SalesDashboard() {
   const [showBookingPrice, setShowBookingPrice] = useState(false);
   const [saleModalProduct, setSaleModalProduct] = useState(null);
   const [saleDraft, setSaleDraft] = useState({ qty: '1', price: '', discount: '0' });
+  const [heldBills, setHeldBills] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(heldBillsStorageKey) || '[]');
+    } catch (err) {
+      return [];
+    }
+  });
+  const [heldBillsOpen, setHeldBillsOpen] = useState(false);
+  const [expandedHeldBillIds, setExpandedHeldBillIds] = useState({});
   const cartFieldRefs = useRef({});
   const productSearchRef = useRef(null);
+  const productSearchInputRef = useRef(null);
   const saleQtyRef = useRef(null);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
@@ -133,6 +158,9 @@ export default function SalesDashboard() {
       return current;
     });
   }, [cart.length]);
+  useEffect(() => {
+    window.localStorage.setItem(heldBillsStorageKey, JSON.stringify(heldBills));
+  }, [heldBills]);
 
   async function loadWarehouseOptions(productId) {
     if (warehouseOptions[productId]) return;
@@ -158,6 +186,7 @@ export default function SalesDashboard() {
   function scrollToProductSearch() {
     window.setTimeout(() => {
       productSearchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      productSearchInputRef.current?.focus();
     }, 0);
   }
 
@@ -241,9 +270,9 @@ export default function SalesDashboard() {
     });
   }
 
-  const totals = useMemo(() => cart.reduce((a, i) => { a.sub += i.qty * i.price; a.dis += i.discount; return a; }, { sub: 0, dis: 0 }), [cart]);
+  const totals = useMemo(() => calculateBillTotals(cart), [cart]);
 
-  function clearCurrentBill() {
+  function resetCurrentBill() {
     setCart([]);
     setSelectedCart({ row: -1, field: 'qty' });
     setCustomerMode('walk-in');
@@ -251,6 +280,77 @@ export default function SalesDashboard() {
     setCustomerSearch('');
     setPaymentStatus('paid');
     setPaidAmount('');
+  }
+
+  function clearCurrentBill() {
+    resetCurrentBill();
+  }
+
+  function createHeldBillSnapshot() {
+    if (!cart.length) return null;
+    const billTotals = calculateBillTotals(cart);
+    return {
+      id: createHeldBillId(),
+      createdAt: new Date().toISOString(),
+      cart,
+      customerMode,
+      selectedCustomer,
+      customerSearch,
+      paymentStatus,
+      paidAmount,
+      totals: billTotals
+    };
+  }
+
+  function customerLabelForBill(bill) {
+    return bill.selectedCustomer?.name || (bill.customerMode === 'walk-in' ? 'Walk-in Customer' : 'Existing Customer');
+  }
+
+  function holdCurrentBill({ silent = false } = {}) {
+    const snapshot = createHeldBillSnapshot();
+    if (!snapshot) {
+      if (!silent) setNotice({ type: 'error', title: 'No Bill To Hold', message: 'Add at least one item before holding a bill.' });
+      return null;
+    }
+    setHeldBills(current => [snapshot, ...current]);
+    resetCurrentBill();
+    if (!silent) {
+      setHeldBillsOpen(true);
+      setNotice({ type: 'success', title: 'Bill Held', message: `${customerLabelForBill(snapshot)} bill is saved for later.` });
+    }
+    return snapshot;
+  }
+
+  function resumeHeldBill(bill) {
+    if (!bill) return;
+    const resumedCart = bill.cart || [];
+    if (cart.length) holdCurrentBill({ silent: true });
+    setCart(resumedCart);
+    setSelectedCart(resumedCart.length ? { row: 0, field: 'qty' } : { row: -1, field: 'qty' });
+    setCustomerMode(bill.customerMode || 'walk-in');
+    setSelectedCustomer(bill.selectedCustomer || null);
+    setCustomerSearch(bill.customerSearch || '');
+    setPaymentStatus(bill.paymentStatus || 'paid');
+    setPaidAmount(bill.paidAmount || '');
+    resumedCart.forEach(item => {
+      if (Number(item.qty || 0) > Number(item.stock || 0)) loadWarehouseOptions(item.productId);
+    });
+    setHeldBills(current => current.filter(item => item.id !== bill.id));
+    setHeldBillsOpen(false);
+    setNotice({ type: 'success', title: 'Bill Resumed', message: `${customerLabelForBill(bill)} bill is back on the counter.` });
+  }
+
+  function removeHeldBill(billId) {
+    setHeldBills(current => current.filter(item => item.id !== billId));
+    setExpandedHeldBillIds(current => {
+      const next = { ...current };
+      delete next[billId];
+      return next;
+    });
+  }
+
+  function toggleHeldBillDetails(billId) {
+    setExpandedHeldBillIds(current => ({ ...current, [billId]: !current[billId] }));
   }
 
   function moveProductSelection(delta) {
@@ -297,7 +397,10 @@ export default function SalesDashboard() {
       moveProductSelection(-1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      addSelectedProduct();
+      load(1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.currentTarget.blur();
     }
   }
 
@@ -448,16 +551,32 @@ export default function SalesDashboard() {
   }
 
   const totalPages = Math.ceil(total / limit);
-  const billTotal = totals.sub - totals.dis;
+  const billTotal = totals.total;
   const duePreview = paymentStatus === 'paid' ? 0 : paymentStatus === 'partial' ? Math.max(0, billTotal - Number(paidAmount || 0)) : billTotal;
 
-  return <Layout title="Sales Counter" subtitle="Search products, sell items, apply discounts, print receipts and process returns." wide>
+  return <Layout
+    title="Sales Counter"
+    subtitle="Search products, sell items, apply discounts, print receipts and process returns."
+    wide
+    headerAction={
+      <button
+        type="button"
+        onClick={() => setHeldBillsOpen(true)}
+        className="relative inline-flex items-center justify-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft hover:bg-slate-50"
+        title="Held bills"
+      >
+        <ReceiptText size={18} />
+        <span>Held Bills</span>
+        {heldBills.length > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-red px-1 text-[11px] font-bold text-white">{heldBills.length}</span>}
+      </button>
+    }
+  >
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
         <div ref={productSearchRef} className="mb-5 flex min-w-0 scroll-mt-5 flex-col gap-3 sm:flex-row xl:flex-nowrap">
           <div className="flex-1 relative">
-            <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
+            <input ref={productSearchInputRef} value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
             {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
           </div>
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark px-6 py-3 text-white sm:py-0">Search</button>
@@ -499,7 +618,10 @@ export default function SalesDashboard() {
       <aside className="w-full rounded-3xl bg-white p-4 shadow-soft border h-fit lg:sticky lg:top-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold">Current Bill</h3>
-          {cart.length > 0 && <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>}
+          {cart.length > 0 && <div className="flex items-center gap-2">
+            <button type="button" onClick={() => holdCurrentBill()} className="rounded-xl border px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" title="Hold current bill">Hold</button>
+            <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>
+          </div>}
         </div>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
           {cart.map((i,idx)=>{
@@ -593,6 +715,84 @@ export default function SalesDashboard() {
         </div>}
       </aside>
     </div>
+
+    {heldBillsOpen && <div className="no-print fixed inset-0 z-[80]">
+      <button type="button" className="absolute inset-0 bg-slate-950/40" onClick={() => setHeldBillsOpen(false)} aria-label="Close held bills" />
+      <aside className="absolute right-0 top-0 flex h-full w-[min(460px,100vw)] flex-col bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b p-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-brand-red"><ReceiptText size={20} /></div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Held Bills</h3>
+              <p className="text-sm text-slate-500">{heldBills.length} bill{heldBills.length === 1 ? '' : 's'} waiting</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => setHeldBillsOpen(false)} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50" title="Close held bills"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {heldBills.length === 0 && <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed p-8 text-center">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-slate-50 text-slate-500"><ReceiptText size={22} /></div>
+              <p className="font-semibold text-slate-900">No held bills</p>
+              <p className="mt-1 text-sm text-slate-500">Use Hold on the current bill to save it here while you serve another customer.</p>
+            </div>
+          </div>}
+          {heldBills.length > 0 && <div className="space-y-3">
+            {heldBills.map(bill => {
+              const isExpanded = Boolean(expandedHeldBillIds[bill.id]);
+              const billTotals = bill.totals || calculateBillTotals(bill.cart || []);
+              return <div key={bill.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-bold text-slate-900">{customerLabelForBill(bill)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{new Date(bill.createdAt).toLocaleString()} · {(bill.cart || []).length} item{(bill.cart || []).length === 1 ? '' : 's'}</p>
+                  </div>
+                  <p className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900">Rs {Number(billTotals.total || 0).toLocaleString()}</p>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Subtotal</p><p className="font-bold">Rs {Number(billTotals.sub || 0).toLocaleString()}</p></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">Discount</p><p className="font-bold">Rs {Number(billTotals.dis || 0).toLocaleString()}</p></div>
+                </div>
+                <button type="button" onClick={() => toggleHeldBillDetails(bill.id)} className="mt-3 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <span>Bill details</span>
+                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+                {isExpanded && <div className="mt-3 overflow-hidden rounded-xl border">
+                  <div className="max-h-72 overflow-y-auto">
+                    {(bill.cart || []).map(item => {
+                      const lineTotal = Number(item.qty || 0) * Number(item.price || 0) - Number(item.discount || 0);
+                      return <div key={item.productId} className="border-b p-3 last:border-b-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-semibold text-slate-900">{item.partName}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{item.partCode || '-'}</p>
+                          </div>
+                          <p className="shrink-0 text-sm font-bold">Rs {lineTotal.toLocaleString()}</p>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                          <div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Qty</p><p className="font-bold">{Number(item.qty || 0).toLocaleString()}</p></div>
+                          <div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Price</p><p className="font-bold">Rs {Number(item.price || 0).toLocaleString()}</p></div>
+                          <div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-500">Discount</p><p className="font-bold">Rs {Number(item.discount || 0).toLocaleString()}</p></div>
+                        </div>
+                      </div>;
+                    })}
+                  </div>
+                </div>}
+                <div className="mt-4 flex gap-2">
+                  <button type="button" onClick={() => resumeHeldBill(bill)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-red px-4 py-3 text-sm font-bold text-white">
+                    <RotateCcw size={16} />
+                    Resume
+                  </button>
+                  <button type="button" onClick={() => removeHeldBill(bill.id)} className="rounded-xl border px-3 py-3 text-slate-500 hover:bg-red-50 hover:text-brand-red" title="Remove held bill">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>;
+            })}
+          </div>}
+        </div>
+      </aside>
+    </div>}
 
     {saleModalProduct && <Modal title="Sell Product" onClose={closeSaleModal}>
       <form onSubmit={submitSaleModal} className="grid gap-5">

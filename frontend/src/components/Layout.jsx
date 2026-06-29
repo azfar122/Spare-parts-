@@ -6,7 +6,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
 import logo from '../assets/atlas-honda-logo.png';
 
-export default function Layout({ title, subtitle, children, wide = false }) {
+export default function Layout({ title, subtitle, children, wide = false, headerAction = null }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -180,7 +180,10 @@ export default function Layout({ title, subtitle, children, wide = false }) {
       </aside>
     </div>}
     <main className={`mx-auto w-full px-3 py-5 sm:px-6 sm:py-8 ${wide ? 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-3rem)]' : 'max-w-7xl'}`}>
-      <div className="mb-5 sm:mb-7"><h2 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
+      <div className="mb-5 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><h2 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2><p className="text-slate-500 mt-1">{subtitle}</p></div>
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
+      </div>
       {children}
     </main>
   </div>;

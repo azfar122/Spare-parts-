@@ -1,5 +1,16 @@
+import { useEffect } from 'react';
+
 export default function Modal({ title, children, onClose, fillViewport = false }) {
   const panelHeight = fillViewport ? 'h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-2rem)]' : 'max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]';
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') onClose?.();
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return <div className="fixed inset-0 bg-slate-900/50 grid place-items-center overflow-hidden p-2 sm:p-4 z-50">
     <div className={`flex ${panelHeight} w-full max-w-2xl flex-col rounded-2xl bg-white shadow-soft sm:rounded-3xl`}>
