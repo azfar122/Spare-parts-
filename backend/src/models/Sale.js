@@ -1,5 +1,11 @@
 import mongoose from 'mongoose';
 
+const warehouseAllocationSchema = new mongoose.Schema({
+  warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
+  warehouseName: { type: String, default: '' },
+  qty: { type: Number, required: true, min: 1 }
+}, { _id: false });
+
 const saleItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   partName: String,
@@ -12,6 +18,7 @@ const saleItemSchema = new mongoose.Schema({
   warehouseQtyUsed: { type: Number, default: 0 },
   warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
   warehouseName: { type: String, default: '' },
+  warehouseAllocations: [warehouseAllocationSchema],
   lineTotal: { type: Number, required: true }
 }, { _id: false });
 

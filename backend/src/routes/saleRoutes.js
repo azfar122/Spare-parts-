@@ -230,20 +230,54 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       const currentStock = productStock(product);
       const inventoryQtyUsed = Math.min(currentStock, qty);
       const warehouseQtyNeeded = qty - inventoryQtyUsed;
-      let warehouseStock = null;
       let warehouseQtyUsed = 0;
       let warehouseName = '';
+      let warehouse = null;
+      const warehouseAllocations = [];
+      const requestedAllocations = Array.isArray(item.warehouseAllocations) && item.warehouseAllocations.length
+        ? item.warehouseAllocations
+        : item.warehouseId
+          ? [{ warehouseId: item.warehouseId, qty: warehouseQtyNeeded }]
+          : [];
 
       if (warehouseQtyNeeded > 0) {
-        if (!item.warehouseId) throw new Error(`Select a warehouse for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
-        warehouseStock = await WarehouseStock.findOne({ warehouse: item.warehouseId, product: product._id })
-          .populate('warehouse', 'name')
-          .session(session);
-        if (!warehouseStock || Number(warehouseStock.quantity || 0) < warehouseQtyNeeded) {
-          throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
+        if (!requestedAllocations.length) throw new Error(`Select warehouse stock for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
+
+        const normalizedAllocations = requestedAllocations
+          .map(allocation => ({
+            warehouseId: allocation.warehouseId || allocation.warehouse,
+            qty: Number(allocation.qty || 0)
+          }))
+          .filter(allocation => allocation.warehouseId && allocation.qty > 0);
+        const allocatedQty = normalizedAllocations.reduce((sum, allocation) => sum + allocation.qty, 0);
+        if (allocatedQty !== warehouseQtyNeeded) {
+          throw new Error(`Allocate exactly ${warehouseQtyNeeded} warehouse item(s) for ${productLabel(product)}`);
         }
-        warehouseQtyUsed = warehouseQtyNeeded;
-        warehouseName = warehouseStock.warehouse?.name || '';
+
+        const duplicateWarehouse = normalizedAllocations.find((allocation, index) =>
+          normalizedAllocations.findIndex(other => String(other.warehouseId) === String(allocation.warehouseId)) !== index
+        );
+        if (duplicateWarehouse) throw new Error(`Select each warehouse only once for ${productLabel(product)}`);
+
+        for (const allocation of normalizedAllocations) {
+          const warehouseStock = await WarehouseStock.findOne({ warehouse: allocation.warehouseId, product: product._id })
+            .populate('warehouse', 'name')
+            .session(session);
+          if (!warehouseStock || Number(warehouseStock.quantity || 0) < allocation.qty) {
+            throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
+          }
+
+          warehouseStock.quantity -= allocation.qty;
+          await warehouseStock.save({ session });
+          warehouseQtyUsed += allocation.qty;
+          if (!warehouse) warehouse = warehouseStock.warehouse?._id;
+          if (!warehouseName) warehouseName = warehouseStock.warehouse?.name || '';
+          warehouseAllocations.push({
+            warehouse: warehouseStock.warehouse?._id,
+            warehouseName: warehouseStock.warehouse?.name || '',
+            qty: allocation.qty
+          });
+        }
       }
 
       const price = Number(item.price ?? productPrice(product));
@@ -259,11 +293,6 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         );
       }
 
-      if (warehouseStock && warehouseQtyUsed > 0) {
-        warehouseStock.quantity -= warehouseQtyUsed;
-        await warehouseStock.save({ session });
-      }
-
       saleItems.push({
         product: product._id,
         partName: productData.partName,
@@ -274,8 +303,9 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         discount,
         inventoryQtyUsed,
         warehouseQtyUsed,
-        warehouse: warehouseStock?.warehouse?._id,
+        warehouse,
         warehouseName,
+        warehouseAllocations,
         lineTotal
       });
     }

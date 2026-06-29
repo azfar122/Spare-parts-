@@ -196,14 +196,17 @@ export default function SalesDashboard() {
     const price = Number(values.price ?? p.mrp ?? 0) || 0;
     const discount = Number(values.discount ?? 0) || 0;
     const existingIndex = cart.findIndex(i => i.productId === p._id);
+    const existingItem = existingIndex >= 0 ? cart[existingIndex] : null;
+    const nextQty = Number(existingItem?.qty || 0) + qty;
     if (existingIndex >= 0) {
       setSelectedCart({ row: existingIndex, field: 'qty' });
       setCart(c => c.map((item, idx) => idx === existingIndex ? {
         ...item,
-        qty: Number(item.qty || 0) + qty,
+        qty: nextQty,
         price,
         discount: Number(item.discount || 0) + discount,
-        warehouseId: Number(item.qty || 0) + qty <= Number(item.stock || 0) ? '' : item.warehouseId
+        warehouseId: nextQty <= Number(item.stock || 0) ? '' : item.warehouseId,
+        warehouseAllocations: nextQty <= Number(item.stock || 0) ? [] : item.warehouseAllocations || []
       } : item));
     } else {
       setSelectedCart({ row: cart.length, field: 'qty' });
@@ -217,10 +220,11 @@ export default function SalesDashboard() {
         stock: p.quantity,
         warehouseQuantity: p.warehouseQuantity || 0,
         warehouseStocks: p.warehouseStocks || [],
-        warehouseId: ''
+        warehouseId: '',
+        warehouseAllocations: []
       }]);
     }
-    if (qty > Number(p.quantity || 0) && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
+    if (nextQty > Number(p.quantity || 0) && Number(p.warehouseQuantity || 0) > 0) loadWarehouseOptions(p._id);
   }
 
   function submitSaleModal(e) {
@@ -260,11 +264,41 @@ export default function SalesDashboard() {
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
   function updateCartQty(index, value, item) {
     const qty = Number(value) || 0;
-    setCart(c => c.map((x, idx) => idx === index ? { ...x, qty, warehouseId: qty <= Number(x.stock || 0) ? '' : x.warehouseId } : x));
+    setCart(c => c.map((x, idx) => idx === index ? {
+      ...x,
+      qty,
+      warehouseId: qty <= Number(x.stock || 0) ? '' : x.warehouseId,
+      warehouseAllocations: qty <= Number(x.stock || 0) ? [] : x.warehouseAllocations || []
+    } : x));
     if (qty > Number(item.stock || 0)) loadWarehouseOptions(item.productId);
   }
-  function updateCartWarehouse(index, warehouseId) {
-    setCart(c => c.map((x, idx) => idx === index ? { ...x, warehouseId } : x));
+  function warehouseAllocationTotal(item) {
+    return (item.warehouseAllocations || []).reduce((sum, allocation) => sum + Number(allocation.qty || 0), 0);
+  }
+  function toggleCartWarehouseAllocation(index, stock) {
+    setCart(c => c.map((item, idx) => {
+      if (idx !== index) return item;
+      const warehouseId = String(stock.warehouse._id);
+      const allocations = item.warehouseAllocations || [];
+      const exists = allocations.some(allocation => String(allocation.warehouseId) === warehouseId);
+      if (exists) {
+        const nextAllocations = allocations.filter(allocation => String(allocation.warehouseId) !== warehouseId);
+        return { ...item, warehouseAllocations: nextAllocations, warehouseId: nextAllocations[0]?.warehouseId || '' };
+      }
+      const shortageQty = Math.max(0, Number(item.qty || 0) - Number(item.stock || 0));
+      const allocatedQty = warehouseAllocationTotal(item);
+      const suggestedQty = Math.min(Number(stock.quantity || 0), Math.max(1, shortageQty - allocatedQty));
+      const nextAllocations = [...allocations, { warehouseId, warehouseName: stock.warehouse.name, qty: suggestedQty }];
+      return { ...item, warehouseAllocations: nextAllocations, warehouseId: nextAllocations[0]?.warehouseId || '' };
+    }));
+  }
+  function updateCartWarehouseAllocationQty(index, warehouseId, value) {
+    setCart(c => c.map((item, idx) => idx === index ? {
+      ...item,
+      warehouseAllocations: (item.warehouseAllocations || []).map(allocation =>
+        String(allocation.warehouseId) === String(warehouseId) ? { ...allocation, qty: Number(value) || 0 } : allocation
+      )
+    } : item));
   }
 
   function removeCartItem(index) {
@@ -442,8 +476,14 @@ export default function SalesDashboard() {
     try {
       if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer for this bill.' });
       if (customerMode === 'walk-in' && paymentStatus !== 'paid') return setNotice({ type: 'error', title: 'Customer Required', message: 'Unpaid or partial bills must be linked to an existing customer.' });
-      const itemMissingWarehouse = cart.find(item => Number(item.qty || 0) > Number(item.stock || 0) && !item.warehouseId);
-      if (itemMissingWarehouse) return setNotice({ type: 'error', title: 'Warehouse Required', message: `Select a warehouse for ${itemMissingWarehouse.partCode}.` });
+      const itemMissingWarehouse = cart.find(item => {
+        const shortageQty = Math.max(0, Number(item.qty || 0) - Number(item.stock || 0));
+        return shortageQty > 0 && warehouseAllocationTotal(item) !== shortageQty;
+      });
+      if (itemMissingWarehouse) {
+        const shortageQty = Math.max(0, Number(itemMissingWarehouse.qty || 0) - Number(itemMissingWarehouse.stock || 0));
+        return setNotice({ type: 'error', title: 'Warehouse Required', message: `Allocate exactly ${shortageQty} warehouse item(s) for ${itemMissingWarehouse.partCode}.` });
+      }
       setCheckoutLoading(true);
       const r = await api.post('/sales', {
         customerName: selectedCustomer?.name || 'Walk-in Customer',
@@ -640,6 +680,7 @@ export default function SalesDashboard() {
           {cart.map((i,idx)=>{
             const shortageQty = Math.max(0, Number(i.qty || 0) - Number(i.stock || 0));
             const availableWarehouseOptions = warehouseOptions[i.productId] || [];
+            const allocatedWarehouseQty = warehouseAllocationTotal(i);
             return <div key={i.productId} onClick={() => setSelectedCart({ row: idx, field: selectedCart.field || 'qty' })} className={`relative cursor-pointer rounded-2xl p-3 pr-11 ${selectedCart.row === idx ? 'bg-red-50 ring-2 ring-brand-red/30' : 'bg-slate-50'}`}>
             <button
               type="button"
@@ -661,13 +702,53 @@ export default function SalesDashboard() {
               <div><label className="text-xs text-slate-600">Discount</label><input ref={node => { cartFieldRefs.current[`${idx}-discount`] = node; }} value={i.discount} onFocus={() => setSelectedCart({ row: idx, field: 'discount' })} onKeyDown={e => handleCartKeyDown(e, idx, 'discount')} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
             </div>
             {shortageQty > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <label className="text-xs font-semibold text-amber-800">Main stock short by {shortageQty}. Select warehouse source.</label>
-              <select value={i.warehouseId || ''} onChange={e => updateCartWarehouse(idx, e.target.value)} className="mt-2 w-full rounded-xl border bg-white p-2 text-sm">
-                <option value="">Choose warehouse</option>
-                {availableWarehouseOptions.map(stock => (
-                  <option key={stock.warehouse._id} value={stock.warehouse._id}>{stock.warehouse.name} · available {stock.quantity}</option>
-                ))}
-              </select>
+              <div className="flex flex-col gap-1 text-xs text-amber-900">
+                <p className="font-semibold">Main stock covers {Math.min(Number(i.qty || 0), Number(i.stock || 0)).toLocaleString()}. Allocate warehouse shortage: {shortageQty.toLocaleString()}.</p>
+                <p className={allocatedWarehouseQty === shortageQty ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>
+                  Allocated {allocatedWarehouseQty.toLocaleString()} / {shortageQty.toLocaleString()}
+                </p>
+              </div>
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" checked readOnly className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-900">Main stock</span>
+                    <span className="block text-xs text-slate-500">Using {Math.min(Number(i.qty || 0), Number(i.stock || 0)).toLocaleString()} from shop stock</span>
+                  </span>
+                </label>
+              </div>
+              {availableWarehouseOptions.length > 0 && <div className="mt-3 space-y-2">
+                {availableWarehouseOptions.map(stock => {
+                  const warehouseId = String(stock.warehouse._id);
+                  const allocation = (i.warehouseAllocations || []).find(row => String(row.warehouseId) === warehouseId);
+                  const checked = Boolean(allocation);
+                  return <div key={warehouseId} className="rounded-xl border border-amber-200 bg-white p-3">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCartWarehouseAllocation(idx, stock)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-red focus:ring-brand-red"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-sm font-semibold text-slate-900">{stock.warehouse.name}</span>
+                        <span className="block text-xs text-slate-500">Available {Number(stock.quantity || 0).toLocaleString()}</span>
+                      </span>
+                    </label>
+                    {checked && <div className="mt-3">
+                      <label className="text-xs font-semibold text-slate-600">Use qty</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={Number(stock.quantity || 0)}
+                        value={allocation.qty}
+                        onChange={e => updateCartWarehouseAllocationQty(idx, warehouseId, e.target.value)}
+                        className="mt-1 w-full rounded-xl border p-2 text-sm focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
+                      />
+                    </div>}
+                  </div>;
+                })}
+              </div>}
               {availableWarehouseOptions.length === 0 && <p className="mt-2 text-xs text-amber-800">No warehouse stock available for this product.</p>}
             </div>}
           </div>;
@@ -879,7 +960,7 @@ export default function SalesDashboard() {
 
         {Number(saleDraft.qty || 0) > Number(saleModalProduct.quantity || 0) && Number(saleModalProduct.warehouseQuantity || 0) > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Main stock is short by {(Number(saleDraft.qty || 0) - Number(saleModalProduct.quantity || 0)).toLocaleString()}. Select the warehouse source from the bill item after adding it.
+            Main stock is short by {(Number(saleDraft.qty || 0) - Number(saleModalProduct.quantity || 0)).toLocaleString()}. Select one or more warehouse sources from the bill item after adding it.
           </div>
         )}
 
