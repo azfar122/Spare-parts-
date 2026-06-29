@@ -47,6 +47,8 @@ export default function SalesDashboard() {
   const cartFieldRefs = useRef({});
   const productSearchRef = useRef(null);
   const saleQtyRef = useRef(null);
+  const salePriceRef = useRef(null);
+  const saleDiscountRef = useRef(null);
 
   async function load(pageNum = 1) {
     try {
@@ -199,8 +201,25 @@ export default function SalesDashboard() {
     if (qty <= 0) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Enter a quantity greater than zero.' });
     if (qty > availableQty) return setNotice({ type: 'error', title: 'Not Enough Stock', message: `Only ${availableQty.toLocaleString()} pieces are available.` });
     addSale(saleModalProduct, saleDraft);
+    setQ('');
     closeSaleModal();
     scrollToProductSearch();
+  }
+
+  function focusSaleDraftField(field) {
+    const ref = field === 'price' ? salePriceRef : field === 'discount' ? saleDiscountRef : saleQtyRef;
+    window.requestAnimationFrame(() => ref.current?.select());
+  }
+
+  function handleSaleDraftKeyDown(e, field) {
+    if (e.key !== 'Enter') return;
+    if (field === 'qty') {
+      e.preventDefault();
+      focusSaleDraftField('price');
+    } else if (field === 'price') {
+      e.preventDefault();
+      focusSaleDraftField('discount');
+    }
   }
 
   function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
@@ -607,6 +626,7 @@ export default function SalesDashboard() {
               min="1"
               max={Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0)}
               value={saleDraft.qty}
+              onKeyDown={e => handleSaleDraftKeyDown(e, 'qty')}
               onChange={e => setSaleDraft(current => ({ ...current, qty: e.target.value }))}
               className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
             />
@@ -614,9 +634,11 @@ export default function SalesDashboard() {
           <div>
             <label className="text-sm font-semibold text-slate-700">Price</label>
             <input
+              ref={salePriceRef}
               type="number"
               min="0"
               value={saleDraft.price}
+              onKeyDown={e => handleSaleDraftKeyDown(e, 'price')}
               onChange={e => setSaleDraft(current => ({ ...current, price: e.target.value }))}
               className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
             />
@@ -624,9 +646,11 @@ export default function SalesDashboard() {
           <div>
             <label className="text-sm font-semibold text-slate-700">Discount</label>
             <input
+              ref={saleDiscountRef}
               type="number"
               min="0"
               value={saleDraft.discount}
+              onKeyDown={e => handleSaleDraftKeyDown(e, 'discount')}
               onChange={e => setSaleDraft(current => ({ ...current, discount: e.target.value }))}
               className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
             />
