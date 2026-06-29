@@ -71,6 +71,7 @@ export default function SalesDashboard() {
   const cartFieldRefs = useRef({});
   const productSearchRef = useRef(null);
   const productSearchInputRef = useRef(null);
+  const productSearchNavigatingRef = useRef(false);
   const saleQtyRef = useRef(null);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
@@ -235,6 +236,11 @@ export default function SalesDashboard() {
     scrollToProductSearch();
   }
 
+  function updateProductSearch(value) {
+    productSearchNavigatingRef.current = false;
+    setQ(value);
+  }
+
   function focusSaleDraftField(field) {
     const ref = field === 'price' ? salePriceRef : field === 'discount' ? saleDiscountRef : saleQtyRef;
     window.requestAnimationFrame(() => ref.current?.select());
@@ -391,15 +397,22 @@ export default function SalesDashboard() {
   function handleSearchKeyDown(e) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      productSearchNavigatingRef.current = true;
       moveProductSelection(1);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      productSearchNavigatingRef.current = true;
       moveProductSelection(-1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      load(1);
+      if (!q.trim() || productSearchNavigatingRef.current) addSelectedProduct();
+      else {
+        load(1);
+        productSearchNavigatingRef.current = true;
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      productSearchNavigatingRef.current = true;
       e.currentTarget.blur();
     }
   }
@@ -576,8 +589,8 @@ export default function SalesDashboard() {
       <div className="min-w-0">
         <div ref={productSearchRef} className="mb-5 flex min-w-0 scroll-mt-5 flex-col gap-3 sm:flex-row xl:flex-nowrap">
           <div className="flex-1 relative">
-            <input ref={productSearchInputRef} value={q} onChange={e=>setQ(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
-            {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
+            <input ref={productSearchInputRef} value={q} onChange={e=>updateProductSearch(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search product by part name or code" className="w-full rounded-2xl border p-4" />
+            {q && <button onClick={() => updateProductSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
           </div>
           <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark px-6 py-3 text-white sm:py-0">Search</button>
           <button onClick={()=>setReturnForm(true)} className="rounded-2xl border px-6 py-3 sm:py-0">Return</button>
