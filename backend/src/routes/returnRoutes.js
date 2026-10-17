@@ -1,3 +1,5 @@
+import StockBatch from '../models/StockBatch.js';
+import { returnedCosts, reconcileBatches } from '../utils/stockCost.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
@@ -90,6 +92,14 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         : Number(item.amountRefunded || 0);
       if (!Number.isFinite(refundAmount) || refundAmount < 0) throw new Error('Refund amount must be zero or greater');
 
+      if (!Number.isInteger(item.qty)) throw new Error('Return quantity must be a whole number');
+      await Product.collection.updateOne({ _id: product._id }, { $inc: { stockRevision: 1 } }, { session });
+      await reconcileBatches(product, null, productStock(product), session);
+      const costs = saleItem.costTotal == null
+        ? [{ qty: item.qty, unitCost: Number(productData.bookingPrice || 0), estimated: true }]
+        : returnedCosts(saleItem.costAllocations, alreadyReturnedQty, item.qty);
+      const costReturned = costs.reduce((sum, cost) => sum + cost.qty * cost.unitCost, 0);
+      await StockBatch.create(costs.map(cost => ({ product: product._id, warehouse: null, quantity: cost.qty, remaining: cost.qty, unitCost: cost.unitCost, estimated: cost.estimated, source: 'return' })), { session, ordered: true });
       const nextStock = productStock(product) + item.qty;
       await Product.collection.updateOne(
         { _id: product._id },
@@ -112,6 +122,7 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         originalLineTotal: saleItem.lineTotal,
         qty: item.qty,
         reason,
+        costReturned,
         amountRefunded: refundAmount,
         processedBy: req.user._id
       });

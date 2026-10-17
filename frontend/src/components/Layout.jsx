@@ -46,14 +46,17 @@ export default function Layout({ title, subtitle, children, wide = false, header
 
   const adminLinks = [
     { to: '/admin', label: 'Inventory', icon: Store },
+    { to: '/admin/settings', label: 'Settings', icon: ShieldCheck },
     { to: '/admin/sales', label: 'Sales', icon: BarChart3 },
     { to: '/admin/customers', label: 'Khata', icon: BookOpen },
     { to: '/admin/warehouses', label: 'Warehouse', icon: Building2 },
+    { to: '/admin/purchases', label: 'Purchase Items', icon: PackagePlus },
     { to: '/admin/purchase-orders', label: 'Orders', icon: Package }
   ];
   const salesLinks = [
     { to: '/sales', label: 'Counter', icon: Store },
     { to: '/sales/bills', label: 'Sales', icon: BarChart3 },
+    { to: '/sales/purchases', label: 'Purchase Items', icon: PackagePlus },
     { to: '/sales/purchase-orders', label: 'Orders', icon: Package }
   ];
   const navLinks = user?.role === 'admin' ? adminLinks : user?.role === 'sales' ? salesLinks : [];

@@ -83,7 +83,7 @@ export default function ShopReceipt({ receipt }) {
             <td>{index + 1}</td>
             <td>
               <b>{item.partName}</b>
-              <span>{[item.model, item.partCode].filter(Boolean).join(' ')}</span>
+              <span>{item.partCode}</span>
             </td>
             <td>{money(item.qty)}</td>
             <td>{money(item.price)}</td>

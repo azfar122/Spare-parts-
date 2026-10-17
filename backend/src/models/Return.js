@@ -12,6 +12,7 @@ const returnSchema = new mongoose.Schema({
   originalPrice: { type: Number, default: 0 },
   originalLineTotal: { type: Number, default: 0 },
   qty: { type: Number, required: true, min: 1 },
+  costReturned: Number,
   reason: { type: String, default: '' },
   amountRefunded: { type: Number, default: 0 },
   processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

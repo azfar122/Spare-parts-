@@ -7,6 +7,10 @@ import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 
 export default function SalesAnalytics() {
+  const [showProfitDetails, setShowProfitDetails] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [openingReceipt, setOpeningReceipt] = useState(false);
+  const [profitSummary, setProfitSummary] = useState(null);
   const [sales, setSales] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -69,6 +73,7 @@ export default function SalesAnalytics() {
 
       const r = await api.get('/sales', { params });
       setSales(r.data.items);
+      setProfitSummary(r.data.profitSummary || null);
       setTotal(r.data.total || 0);
       setPage(pageNum);
       setProductSearchActive(Boolean(trimmedProductCode || trimmedProductName));
@@ -142,7 +147,7 @@ export default function SalesAnalytics() {
 
   const totalPages = Math.ceil(total / limit);
 
-  return <Layout title="Sales Analytics" subtitle="View and search all sales transactions by date and product.">
+  return <Layout wide title="Sales Analytics" subtitle="View and search all sales transactions by date and product.">
     <div className="rounded-3xl bg-white p-4 shadow-soft border mb-6 sm:p-6">
       <h3 className="font-bold text-lg mb-4">Filters</h3>
       <form onSubmit={handleSearch}>
@@ -184,7 +189,7 @@ export default function SalesAnalytics() {
                   className="w-full border-b p-3 text-left last:border-b-0 hover:bg-slate-50"
                 >
                   <span className="block font-semibold">{product.productName || product.partName}</span>
-                  <span className="text-xs text-slate-500">{[product.partNo || product.partCode, product.brand, product.category].filter(Boolean).join(' · ') || 'No part details'}</span>
+                  <span className="text-xs text-slate-500">{[product.partNo || product.partCode, product.brand].filter(Boolean).join(' · ') || 'No part details'}</span>
                 </button>
               ))}
             </div>}
@@ -197,10 +202,24 @@ export default function SalesAnalytics() {
           </button>
           <button type="button" onClick={clearFilters} className="w-full md:w-auto rounded-xl border px-6 py-3 font-medium">Clear Filters</button>
         </div>
-        <p className="mt-3 text-sm text-slate-500">Bill Subtotal is before discount. Bill Total is after discount.</p>
+        <p className="mt-3 text-sm text-slate-500">Bill Subtotal is before discount. Bill Total is after discount. Gross profit uses FIFO purchase costs and accounts for returns. Existing stock uses saved booking costs; older bills without recorded costs show “Not recorded”. Profit columns cover the whole bill.</p>
       </form>
     </div>
 
+    {profitSummary && <div className="mb-5 grid gap-4 md:grid-cols-2" aria-busy={loading}>
+      <div className="rounded-2xl border bg-white p-5 shadow-soft">
+        <p className="text-sm text-slate-500">Revenue</p>
+        <p className="mt-2 text-3xl font-bold">Rs {Number(profitSummary.revenue).toLocaleString()}</p>
+        <p className="mt-2 text-sm text-slate-500">All matching sales after discounts and returns, across every page.</p>
+      </div>
+      <div className="rounded-2xl border bg-white p-5 shadow-soft">
+        <p className="text-sm text-slate-500">Gross Profit</p>
+        <p className="mt-2 text-3xl font-bold">Rs {Number(profitSummary.profit).toLocaleString()}</p>
+        <p className="mt-1 text-sm text-slate-500">Cost of sold stock: Rs {Number(profitSummary.cost).toLocaleString()}</p>
+        {profitSummary.missingCostItems > 0 && <p className="mt-2 text-sm text-amber-700">Excludes {profitSummary.missingCostItems} older sale item(s) without recorded costs. Revenue includes these sales.</p>}
+        <button type="button" disabled={loading} onClick={() => { setDetailError(''); setShowProfitDetails(true); }} className="mt-4 rounded-xl border px-4 py-2 font-semibold hover:bg-slate-50 disabled:opacity-50">View sales behind this profit</button>
+      </div>
+    </div>}
     {searchPrompt && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{searchPrompt}</div>}
 
     {productSearchActive && matchedSummary && <div className="mb-5 grid gap-4 md:grid-cols-3">
@@ -220,48 +239,52 @@ export default function SalesAnalytics() {
     </div>}
 
     <div className="max-w-full overflow-hidden rounded-3xl bg-white shadow-soft border">
-      {loading ? <LoadingState label="Loading sales..." /> : <div className="max-w-full overflow-x-auto"><table className="w-full min-w-[1200px] text-sm">
+      {loading ? <LoadingState label="Loading sales..." /> : <div className="max-w-full overflow-x-auto"><table className="w-full text-xs xl:text-sm">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
-            <th className="p-4 text-left">Receipt #</th>
-            <th className="p-4 text-left">Date</th>
-            <th className="p-4 text-left">Customer</th>
-            <th className="p-4 text-left">Sold By</th>
-            <th className="p-4 text-right">Items</th>
-            {productSearchActive && <th className="p-4 text-left">Product Name</th>}
-            {productSearchActive && <th className="p-4 text-right">Net Qty</th>}
-            {productSearchActive && <th className="p-4 text-right">Net Amount</th>}
-            <th className="p-4 text-left">Return Status</th>
-            <th className="p-4 text-right">Bill Subtotal</th>
-            <th className="p-4 text-right">Discount</th>
-            <th className="p-4 text-right">Returned</th>
-            <th className="p-4 text-right">Bill Total</th>
-            <th className="p-4 text-right">Net Total</th>
-            <th className="p-4 text-center">Action</th>
+            <th className="px-2 py-3 text-left">Receipt #</th>
+            <th className="px-2 py-3 text-left">Date</th>
+            <th className="px-2 py-3 text-left">Customer</th>
+            <th className="px-2 py-3 text-left">Sold By</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Items</th>
+            {productSearchActive && <th className="px-2 py-3 text-left">Product Name</th>}
+            {productSearchActive && <th className="px-2 py-3 text-right whitespace-nowrap">Net Qty</th>}
+            {productSearchActive && <th className="px-2 py-3 text-right whitespace-nowrap">Net Amount</th>}
+            <th className="px-2 py-3 text-left">Return Status</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Bill Subtotal</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Discount</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Returned</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Bill Total</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Net Total</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Cost of sold stock</th>
+            <th className="px-2 py-3 text-right whitespace-nowrap">Gross profit</th>
+            <th className="px-2 py-3 text-center">Action</th>
           </tr>
         </thead>
         <tbody>
           {sales.map(sale => (
             <tr key={sale._id} className="border-t hover:bg-slate-50/70">
-              <td className="p-4 font-semibold text-brand-red">{sale.receiptNo}</td>
-              <td className="p-4">{new Date(sale.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-              <td className="p-4">{sale.customerName}</td>
-              <td className="p-4 font-semibold">{sale.soldBy?.name || sale.soldBy?.username || '-'}</td>
-              <td className="p-4 text-right">{sale.items.length}</td>
-              {productSearchActive && <td className="p-4 font-semibold">{matchedProductNames(sale)}</td>}
-              {productSearchActive && <td className="p-4 text-right font-semibold">{Number(sale.matchedQty || 0).toLocaleString()}</td>}
-              {productSearchActive && <td className="p-4 text-right font-semibold">Rs {Number(sale.matchedAmount || 0).toLocaleString()}</td>}
-              <td className="p-4">
+              <td className="px-2 py-3 font-semibold text-brand-red whitespace-nowrap">{sale.receiptNo}</td>
+              <td className="px-2 py-3">{new Date(sale.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+              <td className="px-2 py-3">{sale.customerName}</td>
+              <td className="px-2 py-3 font-semibold">{sale.soldBy?.name || sale.soldBy?.username || '-'}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap">{sale.items.length}</td>
+              {productSearchActive && <td className="px-2 py-3 font-semibold">{matchedProductNames(sale)}</td>}
+              {productSearchActive && <td className="px-2 py-3 text-right whitespace-nowrap font-semibold">{Number(sale.matchedQty || 0).toLocaleString()}</td>}
+              {productSearchActive && <td className="px-2 py-3 text-right whitespace-nowrap font-semibold">Rs {Number(sale.matchedAmount || 0).toLocaleString()}</td>}
+              <td className="px-2 py-3">
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${returnStatusClass(sale.returnStatus)}`}>
                   {returnStatusLabel(sale.returnStatus)}
                 </span>
               </td>
-              <td className="p-4 text-right">Rs {Number(sale.subtotal).toLocaleString()}</td>
-              <td className="p-4 text-right">Rs {Number(sale.discountTotal).toLocaleString()}</td>
-              <td className="p-4 text-right text-red-600">Rs {Number(sale.returnedAmount || 0).toLocaleString()}</td>
-              <td className="p-4 text-right font-bold">Rs {Number(sale.grandTotal).toLocaleString()}</td>
-              <td className="p-4 text-right font-bold text-brand-red">Rs {Number(sale.netTotal ?? sale.grandTotal ?? 0).toLocaleString()}</td>
-              <td className="p-4 text-center"><button onClick={() => setSelectedSale(sale)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td>
+              <td className="px-2 py-3 text-right whitespace-nowrap">Rs {Number(sale.subtotal).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap">Rs {Number(sale.discountTotal).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap text-red-600">Rs {Number(sale.returnedAmount || 0).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap font-bold">Rs {Number(sale.grandTotal).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap font-bold text-brand-red">Rs {Number(sale.netTotal ?? sale.grandTotal ?? 0).toLocaleString()}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap">{sale.netCost == null ? 'Not recorded' : `Rs ${Number(sale.netCost).toLocaleString()}`}</td>
+              <td className="px-2 py-3 text-right whitespace-nowrap font-semibold">{sale.netProfit == null ? 'Not recorded' : `Rs ${Number(sale.netProfit).toLocaleString()}`}</td>
+              <td className="px-2 py-3 text-center"><button onClick={() => setSelectedSale(sale)} className="rounded-lg px-3 py-1 border hover:bg-slate-100">View</button></td>
             </tr>
           ))}
         </tbody>
@@ -284,6 +307,27 @@ export default function SalesAnalytics() {
       <button onClick={() => load(page + 1)} disabled={page === totalPages} className="rounded-xl border px-3 py-2 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">Next<ChevronRight size={16}/></button>
     </div>}
 
+    {showProfitDetails && profitSummary && <Modal title="Sales behind this profit" onClose={() => setShowProfitDetails(false)}>
+      <p className="mb-4 text-sm text-slate-500">All sales matching the applied filters. Amounts are after discounts and returns. Open a receipt to see purchase-cost batches.</p>
+      {detailError && <p role="alert" className="mb-3 text-red-700">{detailError}</p>}
+      <div className="max-h-[60vh] overflow-auto"><table className="w-full whitespace-nowrap text-sm"><thead><tr>{['Receipt', 'Product', 'Net qty', 'Revenue', 'Cost', 'Profit'].map(label => <th key={label} className="p-2 text-left">{label}</th>)}</tr></thead><tbody>
+        {(profitSummary.rows || []).map((row, index) => <tr key={`${row.receiptNo}-${index}`} className="border-t">
+          <td className="p-2"><button type="button" disabled={openingReceipt} className="text-brand-red underline disabled:opacity-50" onClick={async () => {
+            setOpeningReceipt(true); setDetailError('');
+            try { const r = await api.get(`/sales/by-receipt/${encodeURIComponent(row.receiptNo)}`); setShowProfitDetails(false); setSelectedSale(r.data); }
+            catch { setDetailError('Could not open the receipt. Please try again.'); }
+            finally { setOpeningReceipt(false); }
+          }}>{row.receiptNo}</button></td>
+          <td className="p-2">{row.partName}<span className="block text-xs text-slate-500">{row.partCode}</span></td>
+          <td className="p-2">{row.qty}</td><td className="p-2">Rs {Number(row.revenue).toLocaleString()}</td>
+          <td className="p-2">{row.cost == null ? 'Not recorded' : `Rs ${Number(row.cost).toLocaleString()}`}</td>
+          <td className="p-2">{row.profit == null ? 'Excluded' : `Rs ${Number(row.profit).toLocaleString()}`}</td>
+        </tr>)}
+        {!profitSummary.rows?.length && <tr><td colSpan="6" className="p-4 text-center">No matching sales.</td></tr>}
+      </tbody></table></div>
+      <p className="mt-4 font-semibold">Gross profit: Rs {Number(profitSummary.profit).toLocaleString()}</p>
+    </Modal>}
+
     {selectedSale && <Modal title={`Receipt ${selectedSale.receiptNo}`} onClose={() => setSelectedSale(null)}>
       <div className="receipt-screen-content space-y-4 text-sm">
         <div className="grid gap-2 sm:grid-cols-2">
@@ -302,7 +346,7 @@ export default function SalesAnalytics() {
             {selectedSale.items.map((item, idx) => (
               <div key={idx} className={`p-3 rounded-lg ${selectedSale.matchedItems?.some(matched => String(matched.product) === String(item.product)) ? 'bg-red-50 ring-1 ring-brand-red/20' : 'bg-slate-50'}`}>
                 <div className="flex flex-col gap-1 min-[380px]:flex-row min-[380px]:justify-between"><span className="font-semibold">{item.partName}</span><span>Net {Number(item.netQty ?? item.qty).toLocaleString()}x</span></div>
-                <div className="text-xs text-slate-500">{item.partCode} · {item.model}</div>
+                <div className="text-xs text-slate-500">{item.partCode}</div>
                 <div className="mt-2 grid gap-2 rounded-lg bg-white p-2 text-xs text-slate-600 sm:grid-cols-3">
                   <span>Sold: <b>{Number(item.qty || 0).toLocaleString()}</b></span>
                   <span>Returned: <b>{Number(item.returnedQty || 0).toLocaleString()}</b></span>
@@ -313,6 +357,7 @@ export default function SalesAnalytics() {
                   <span>Warehouse used: <b>{Number(item.warehouseQtyUsed || 0)}</b></span>
                   <span>Warehouse: <b>{item.warehouseName || '-'}</b></span>
                 </div>
+                {item.costTotal != null && <div className="mt-2 text-xs text-slate-600"><p>Net cost: Rs {Number(item.netCost).toLocaleString()} · Gross profit: Rs {Number(item.netProfit).toLocaleString()}</p>{item.costAllocations?.map((allocation, index) => <p key={index}>{allocation.qty} unit(s) purchased at Rs {Number(allocation.unitCost).toLocaleString()}</p>)}</div>}
                 <div className="flex justify-between text-xs mt-2"><span>Rs {Number(item.price).toLocaleString()}</span><span className="font-semibold">Net Rs {Number(item.netLineTotal ?? item.lineTotal ?? 0).toLocaleString()}</span></div>
               </div>
             ))}
@@ -323,6 +368,7 @@ export default function SalesAnalytics() {
           <div className="flex justify-between"><span>Discount</span><span>-Rs {Number(selectedSale.discountTotal).toLocaleString()}</span></div>
           <div className="flex justify-between"><span>Returned</span><span className="text-red-600">-Rs {Number(selectedSale.returnedAmount || 0).toLocaleString()}</span></div>
           <div className="flex justify-between"><span>Original Total</span><span>Rs {Number(selectedSale.grandTotal).toLocaleString()}</span></div>
+          <div className="flex justify-between"><span>Gross profit</span><span>{selectedSale.netProfit == null ? 'Not recorded' : `Rs ${Number(selectedSale.netProfit).toLocaleString()}`}</span></div>
           <div className="flex justify-between text-lg font-bold text-brand-red"><span>Net Total</span><span>Rs {Number(selectedSale.netTotal ?? selectedSale.grandTotal ?? 0).toLocaleString()}</span></div>
         </div>
         <button type="button" onClick={() => window.print()} className="no-print w-full rounded-xl bg-brand-dark text-white py-3 font-semibold inline-flex items-center justify-center gap-2">

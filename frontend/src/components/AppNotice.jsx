@@ -1,6 +1,15 @@
+import { useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 
 export default function AppNotice({ notice, onClose }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (notice?.type !== 'success') return;
+    const timer = window.setTimeout(() => closeRef.current?.(), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   if (!notice) return null;
 
   const isSuccess = notice.type === 'success';

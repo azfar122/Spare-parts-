@@ -136,7 +136,7 @@ export default function WarehouseStock() {
             <form onSubmit={e => { e.preventDefault(); loadStock(1); }} className="mt-5 flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product name, part no, brand, category or type" className="w-full rounded-xl border py-3 pl-9 pr-3" />
+                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search product name, part no, brand" className="w-full rounded-xl border py-3 pl-9 pr-3" />
               </div>
               <button className="inline-flex items-center justify-center rounded-xl border px-4 py-3 sm:py-0"><RefreshCw size={18}/></button>
             </form>
@@ -149,8 +149,8 @@ export default function WarehouseStock() {
                   <th className="p-4 text-left">Product Name</th>
                   <th className="p-4 text-left">Part No</th>
                   <th className="p-4 text-left">Brand</th>
-                  <th className="p-4 text-left">Category</th>
-                  <th className="p-4 text-left">Type</th>
+
+
                   <th className="p-4 text-right">Retail Price(RP)</th>
                   <th className="p-4 text-right">Main Qty</th>
                   <th className="p-4 text-right">Minimum Qty</th>
@@ -165,8 +165,8 @@ export default function WarehouseStock() {
                     <td className="p-4 font-semibold">{productName(row.product)}</td>
                     <td className="p-4 text-slate-500">{partNo(row.product)}</td>
                     <td className="p-4 text-slate-500">{row.product.brand || '-'}</td>
-                    <td className="p-4 text-slate-500">{row.product.category || '-'}</td>
-                    <td className="p-4 text-slate-500">{row.product.type || row.product.model || '-'}</td>
+
+
                     <td className="p-4 text-right">Rs {Number(row.product.mrp || 0).toLocaleString()}</td>
                     <td className="p-4 text-right">{row.product.quantity}</td>
                     <td className="p-4 text-right">{Number(row.product.minimumQuantity || 0).toLocaleString()}</td>

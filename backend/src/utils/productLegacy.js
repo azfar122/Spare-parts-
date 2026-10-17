@@ -3,8 +3,6 @@ export function serializeProduct(product) {
   const productName = item?.productName || item?.partName || item?.['Product Name'] || item?.['Product name'] || '';
   const partNo = item?.partNo || item?.partCode || item?.PartNo || item?.['Part No'] || item?.['Part No.'] || '';
   const brand = item?.brand || item?.Brand || '';
-  const category = item?.category || item?.Category || '';
-  const type = item?.type || item?.Type || item?.model || '';
   const legacyPrice = item?.bookingPrice ?? item?.['Customer price (cc)'] ?? item?.CCP ?? item?.CP ?? 0;
   const retailPrice = item?.mrp ?? item?.['Retail Price(RP)'] ?? item?.RP ?? 0;
   const mrp = Number(retailPrice || 0) > 0 ? retailPrice : legacyPrice;
@@ -12,13 +10,12 @@ export function serializeProduct(product) {
   const quantity = item?.quantity ?? item?.['Stock Qty'] ?? 0;
   const minimumQuantity = item?.minimumQuantity ?? item?.minimumQty ?? item?.minQuantity ?? item?.['Minimum Quantity'] ?? 0;
 
+  const { category, Category, type, Type, model, Model, description, Description, ...details } = item || {};
   return {
-    ...item,
+    ...details,
     partName: productName,
     partCode: partNo,
     brand,
-    category,
-    type,
     wholesalePrice: item?.wholesalePrice ?? 0,
     bookingPrice,
     mrp,
@@ -50,13 +47,8 @@ export function productSearchConditions(q) {
     { partCode: pattern },
     { PartNo: pattern },
     { 'Part No': pattern },
-    { model: pattern },
     { brand: pattern },
     { Brand: pattern },
-    { category: pattern },
-    { Category: pattern },
-    { type: pattern },
-    { Type: pattern }
   ];
 }
 

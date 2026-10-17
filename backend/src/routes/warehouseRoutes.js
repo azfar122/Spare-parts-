@@ -86,7 +86,7 @@ router.put('/:warehouseId/stock/:productId', requireRole('admin'), async (req, r
       { warehouse: warehouse._id, product: product._id },
       { quantity, updatedBy: req.user._id },
       { new: true, upsert: true, runValidators: true }
-    ).populate('warehouse', 'name location').populate('product', 'partName partCode model brand category type bookingPrice mrp');
+    ).populate('warehouse', 'name location').populate('product', 'partName partCode brand bookingPrice wholesalePrice mrp');
 
     req.app.get('io').emit('inventory:bulk-update');
     res.json(stock);

@@ -68,9 +68,7 @@ async function findOrCreateProductForItem(item, initialMainStock = 0, fallbackPa
   const newProduct = await Product.create({
     partName: item.partName || `New Part - ${partCode}`,
     partCode,
-    model: item.model || 'COMMON',
     brand: item.brand || '',
-    type: item.model || 'COMMON',
     quantity: initialMainStock,
     mrp: 0,
     bookingPrice: 0
@@ -82,7 +80,6 @@ async function findOrCreateProductForItem(item, initialMainStock = 0, fallbackPa
       PartNo: partCode,
       'Part No': partCode,
       Brand: item.brand || '',
-      Type: item.model || 'COMMON',
       'Stock Qty': initialMainStock,
       CCP: 0,
       CP: 0,
@@ -124,7 +121,6 @@ router.post('/', requireRole('admin', 'sales'), async (req, res) => {
       partCode: String(item.partCode || '').trim(),
       partName: String(item.partName || '').trim(),
       brand: String(item.brand || '').trim(),
-      model: String(item.model || 'COMMON').trim() || 'COMMON',
       qty: Number(item.qty || 0)
     }));
     const invalidItem = normalizedItems.find(item => !item.product && !item.partName);

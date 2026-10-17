@@ -16,22 +16,17 @@ function normalizeProductPayload(body) {
   const payload = {
     partName: String(body.partName || body.productName || body['Product name'] || body['Product Name'] || '').trim(),
     partCode: String(body.partCode || body.partNo || body.PartNo || body['Part No'] || body['Part No.'] || '').trim(),
-    model: String(body.model || 'COMMON').trim() || 'COMMON',
     brand: String(body.brand || '').trim(),
-    category: String(body.category || '').trim(),
-    type: String(body.type || body.model || '').trim(),
     wholesalePrice: Number(body.wholesalePrice ?? 0),
     bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
     minimumQuantity,
     quantity: Number(body.quantity || 0),
-    description: String(body.description || '').trim()
   };
 
   if (!Number.isFinite(payload.wholesalePrice) || payload.wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
   if (!payload.partName) throw new Error('Part name is required');
-  if (!payload.model) throw new Error('Model is required');
   if (!payload.partCode) throw new Error('Part code is required');
   if (!Number.isFinite(payload.mrp) || payload.mrp < 0) throw new Error('MRP must be a valid amount');
   if (!Number.isFinite(payload.bookingPrice) || payload.bookingPrice < 0) throw new Error('Booking price must be a valid amount');
@@ -46,8 +41,6 @@ function normalizeProductUpdate(body, existing = {}) {
   const partName = String(body.partName || body.productName || body['Product Name'] || existing.partName || existing['Product Name'] || '').trim();
   const partCode = String(body.partCode || body.partNo || body.PartNo || body['Part No'] || existing.partCode || existing.partNo || existing.PartNo || existing['Part No'] || '').trim();
   const brand = String(body.brand || body.Brand || existing.brand || existing.Brand || '').trim();
-  const category = String(body.category || body.Category || existing.category || existing.Category || '').trim();
-  const type = String(body.type || body.Type || body.model || existing.type || existing.Type || existing.model || '').trim();
   const mrp = Number(body.mrp ?? body.RP ?? existing.mrp ?? existing.RP ?? 0);
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
   const wholesalePrice = Number(body.wholesalePrice ?? existing.wholesalePrice ?? 0);
@@ -65,21 +58,15 @@ function normalizeProductUpdate(body, existing = {}) {
 
   const update = {
     partName,
-    model: type || existing.model || 'COMMON',
     brand,
-    category,
-    type,
     bookingPrice,
     wholesalePrice,
     mrp,
     minOrderQty,
     minimumQuantity,
     quantity,
-    description: String(body.description ?? existing.description ?? '').trim(),
     'Product Name': partName,
     Brand: brand,
-    Category: category,
-    Type: type,
     CCP: bookingPrice,
     CP: bookingPrice,
     RP: mrp,
@@ -106,8 +93,6 @@ function duplicateProductQuery(payload, excludeId) {
     partName: exactText(payload.partName),
     partCode: exactText(payload.partCode),
     brand: exactText(payload.brand),
-    category: exactText(payload.category),
-    type: exactText(payload.type),
     mrp: payload.mrp
   };
 

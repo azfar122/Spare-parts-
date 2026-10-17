@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { useDialogKeyboard } from '../hooks/useKeyboardNavigation.js';
 import { AlertTriangle } from 'lucide-react';
 import { ButtonSpinner } from './Loader.jsx';
 
@@ -11,12 +13,14 @@ export default function ConfirmModal({
   onConfirm,
   onCancel
 }) {
+  const panelRef = useRef(null);
+  useDialogKeyboard(panelRef, onCancel, busy);
   const confirmClass = destructive
     ? 'bg-brand-red text-white hover:bg-red-700'
     : 'bg-brand-dark text-white hover:bg-slate-800';
 
   return <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-900/50 p-4">
-    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-soft">
+    <div ref={panelRef} role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-soft">
       <div className="flex items-start gap-4">
         <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${destructive ? 'bg-red-50 text-brand-red' : 'bg-slate-100 text-slate-700'}`}>
           <AlertTriangle size={22} />

@@ -1,3 +1,5 @@
+import { consumeFifo } from '../utils/stockCost.js';
+import { buildProfitSummary } from '../utils/profitSummary.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
@@ -38,7 +40,8 @@ async function attachReturnSummaries(sales) {
       $group: {
         _id: { sale: '$sale', product: '$product' },
         returnedQty: { $sum: '$qty' },
-        refunded: { $sum: '$amountRefunded' }
+        refunded: { $sum: '$amountRefunded' },
+        costReturned: { $sum: '$costReturned' }
       }
     }
   ]);
@@ -60,6 +63,8 @@ async function attachReturnSummaries(sales) {
       returnedAmount += itemRefunded;
       return {
         ...item,
+        netCost: item.costTotal == null ? null : item.costTotal - Number(previousReturn?.costReturned || 0),
+        netProfit: item.costTotal == null ? null : lineTotal - itemRefunded - item.costTotal + Number(previousReturn?.costReturned || 0),
         returnedQty: itemReturnedQty,
         refunded: itemRefunded,
         returnableQty: Math.max(0, Number(item.qty || 0) - itemReturnedQty),
@@ -74,6 +79,9 @@ async function attachReturnSummaries(sales) {
     return {
       ...sale,
       items,
+      netProfit: items.every(item => item.netProfit != null) ? items.reduce((sum, item) => sum + item.netProfit, 0) : null,
+      netCost: items.every(item => item.netCost != null) ? items.reduce((sum, item) => sum + item.netCost, 0) : null,
+      costEstimated: items.some(item => item.costEstimated),
       returnedQty,
       returnedAmount,
       netTotal,
@@ -180,7 +188,11 @@ router.get('/', requireRole('sales', 'admin'), async (req, res) => {
     };
   }
 
-  res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)), matchedSummary });
+  const profitSales = await attachReturnSummaries(await Sale.find(filter).select('items grandTotal receiptNo createdAt').lean());
+  const profitSummary = buildProfitSummary(profitSales, item =>
+    (!codePattern || codePattern.test(item.partCode || '')) && (!namePattern || namePattern.test(item.partName || ''))
+  );
+  res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)), matchedSummary, profitSummary });
 });
 
 router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, res) => {
@@ -225,7 +237,10 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       const productData = serializeProduct(product);
       const qty = Number(item.qty);
       const discount = Number(item.discount || 0);
-      if (qty <= 0) throw new Error('Invalid quantity');
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity');
+      if (!Number.isFinite(discount) || discount < 0) throw new Error('Invalid discount');
+      const costAllocations = [];
+      await Product.collection.updateOne({ _id: product._id }, { $inc: { stockRevision: 1 } }, { session });
 
       const currentStock = productStock(product);
       const inventoryQtyUsed = Math.min(currentStock, qty);
@@ -267,6 +282,8 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
             throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
           }
 
+          if (!Number.isInteger(allocation.qty)) throw new Error('Warehouse quantity must be a whole number');
+          costAllocations.push(...await consumeFifo(product, allocation.warehouseId, Number(warehouseStock.quantity), allocation.qty, session));
           warehouseStock.quantity -= allocation.qty;
           await warehouseStock.save({ session });
           warehouseQtyUsed += allocation.qty;
@@ -283,7 +300,9 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       const price = Number(item.price ?? productPrice(product));
       if (!Number.isFinite(price) || price < 0) throw new Error('Selling price must be a valid amount of zero or greater');
       const gross = price * qty;
-      const lineTotal = Math.max(0, gross - discount);
+      if (discount > gross) throw new Error('Discount cannot exceed item total');
+      const lineTotal = gross - discount;
+      if (inventoryQtyUsed > 0) costAllocations.push(...await consumeFifo(product, null, currentStock, inventoryQtyUsed, session));
       subtotal += gross;
       discountTotal += discount;
       if (inventoryQtyUsed > 0) {
@@ -298,10 +317,12 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
         product: product._id,
         partName: productData.partName,
         partCode: productData.partCode,
-        model: productData.type || productData.model,
         qty,
         price,
         discount,
+        costAllocations,
+        costTotal: costAllocations.reduce((sum, allocation) => sum + allocation.qty * allocation.unitCost, 0),
+        costEstimated: costAllocations.some(allocation => allocation.estimated),
         inventoryQtyUsed,
         warehouseQtyUsed,
         warehouse,

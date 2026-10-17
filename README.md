@@ -249,3 +249,15 @@ For issues or feature requests, create an issue on GitHub.
 
 ## Important
 This starter is meant for your authorized internal inventory/sales use. Keep dealer portal cookies/tokens private and do not commit `.env` files.
+
+## Purchases and FIFO profit
+
+Both roles can open **Purchase Items** to record received stock: select a product (or create a new item), enter quantity and unit purchase cost, and choose the main store or a warehouse. Recording a purchase atomically increases stock and creates a separate cost batch. Existing products retain their booking, retail, and wholesale prices.
+
+Sales automatically consume the oldest available cost batches within each location supplying stock. Staff do not select batches. Each bill saves its cost allocations, so subsequent purchases and price edits do not change historical profit. Gross profit is actual selling revenue minus discounts and allocated purchase costs; returns reverse the original sale costs and refund amounts. Returned stock is added back to the main store at its original cost.
+
+Admin **Sales** reports show cost and gross profit by bill, purchase-cost breakdowns in bill details, and totals across all matching sales (including product/date filters). These are gross margins, excluding operating expenses. Returns adjust the original bill's reporting period.
+
+Existing inventory without cost batches uses its current booking price as an **estimated** opening cost. Stock added outside Purchase Items (including older order receiving and manual stock adjustments) also uses an estimated booking cost when next reconciled. Use Purchase Items for accurately costed new purchases. Older bills without saved cost allocations show **Not recorded** and are excluded from profit totals; historical costs are not reconstructed.
+
+Purchase and sale transactions require MongoDB Atlas or a replica set. Run accounting checks with `npm -C backend test`.

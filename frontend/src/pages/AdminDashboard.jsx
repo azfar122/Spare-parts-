@@ -49,10 +49,7 @@ export default function AdminDashboard() {
         const hasExact = r.data.items?.some(p => 
           p.partName?.toUpperCase() === q.toUpperCase() || 
           p.partCode?.toUpperCase() === q.toUpperCase() ||
-          p.model?.toUpperCase() === q.toUpperCase() ||
-          p.brand?.toUpperCase() === q.toUpperCase() ||
-          p.category?.toUpperCase() === q.toUpperCase() ||
-          p.type?.toUpperCase() === q.toUpperCase()
+          p.brand?.toUpperCase() === q.toUpperCase()
         );
         setHasExactMatch(hasExact);
       } else {
@@ -94,7 +91,6 @@ export default function AdminDashboard() {
     const formElement = e.currentTarget;
     const form = new FormData(formElement);
     const body = Object.fromEntries(form.entries());
-    body.model = body.type || body.model || 'COMMON';
     body.wholesalePrice = Number(body.wholesalePrice || 0);
     body.mrp = Number(body.mrp);
     body.bookingPrice = Number(body.bookingPrice || 0);
@@ -184,7 +180,6 @@ export default function AdminDashboard() {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const body = Object.fromEntries(form.entries());
-    body.model = body.type || body.model || 'COMMON';
     body.wholesalePrice = Number(body.wholesalePrice || 0);
     body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice || 0); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty || 1); body.minimumQuantity = Number(body.minimumQuantity || 0);
     try {
@@ -248,7 +243,7 @@ export default function AdminDashboard() {
     {tab === 'inventory' && <>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row">
         <div className="flex-1 relative">
-          <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(1)} placeholder="Search by product name, part no, brand, category or type" className="w-full rounded-2xl border p-4 shadow-sm" />
+          <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(1)} placeholder="Search by product name, part no, brand" className="w-full rounded-2xl border p-4 shadow-sm" />
           {q && <button onClick={() => setQ('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={20}/></button>}
         </div>
         <button onClick={()=>load(1)} className="rounded-2xl bg-brand-dark px-6 py-3 text-white sm:py-0">Search</button>
@@ -379,15 +374,12 @@ export default function AdminDashboard() {
       <label className="text-sm font-medium">Product name<input name="partName" defaultValue={editing.partName} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Part No<input name="partCode" defaultValue={editing.partCode} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Brand<input name="brand" defaultValue={editing.brand || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <label className="text-sm font-medium">Category<input name="category" defaultValue={editing.category || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <label className="text-sm font-medium">Type<input name="type" defaultValue={editing.type || editing.model || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Booking Price<input name="bookingPrice" type="number" min="0" step="0.01" defaultValue={editing.bookingPrice || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Wholesale Price<input name="wholesalePrice" type="number" min="0" step="0.01" defaultValue={editing.wholesalePrice || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Retail Price(RP)<input name="mrp" type="number" min="0" step="0.01" defaultValue={editing.mrp} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Stock Qty<input name="quantity" type="number" min="0" defaultValue={editing.quantity} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Min Order Qty<input name="minOrderQty" type="number" min="1" defaultValue={editing.minOrderQty} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Minimum Qty<input name="minimumQuantity" type="number" min="0" defaultValue={editing.minimumQuantity || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
-      <label className="text-sm font-medium sm:col-span-2">description<textarea name="description" defaultValue={editing.description} className="mt-1 w-full rounded-xl border p-3" /></label>
       <button disabled={savingEdit} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2 sm:col-span-2">
         {savingEdit && <ButtonSpinner />}
         {savingEdit ? 'Saving...' : 'Save Changes'}
@@ -398,8 +390,6 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium sm:col-span-2">Product name <span className="text-red-500">*</span><input name="partName" placeholder="e.g., Engine Oil" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">Part No <span className="text-red-500">*</span><input name="partCode" placeholder="e.g., OIL-001" className="mt-1 w-full rounded-xl border p-3" required /></label>
         <label className="text-sm font-medium">Brand<input name="brand" placeholder="e.g., Honda" className="mt-1 w-full rounded-xl border p-3" /></label>
-        <label className="text-sm font-medium">Category<input name="category" placeholder="e.g., Engine" className="mt-1 w-full rounded-xl border p-3" /></label>
-        <label className="text-sm font-medium">Type<input name="type" placeholder="e.g., COMMON" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Booking Price <span className="text-red-500">*</span><input name="bookingPrice" type="number" placeholder="e.g., 450" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Wholesale Price<input name="wholesalePrice" type="number" min="0" step="0.01" defaultValue="0" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Retail Price(RP) <span className="text-red-500">*</span><input name="mrp" type="number" placeholder="e.g., 500" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
@@ -407,7 +397,6 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium">Min Order Qty <span className="text-slate-400">(optional)</span><input name="minOrderQty" type="number" placeholder="e.g., 1" className="mt-1 w-full rounded-xl border p-3" min="1" /></label>
         <label className="text-sm font-medium">Minimum Qty <span className="text-slate-400">(optional)</span><input name="minimumQuantity" type="number" placeholder="e.g., 10" className="mt-1 w-full rounded-xl border p-3" min="0" /></label>
       </div>
-      <label className="text-sm font-medium">Description<textarea name="description" placeholder="Product description..." className="mt-1 w-full rounded-xl border p-3" rows="3" /></label>
       <div className="flex flex-col gap-3 sm:flex-row">
         <button type="submit" disabled={addingProduct} className="flex-1 rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
           {addingProduct && <ButtonSpinner />}

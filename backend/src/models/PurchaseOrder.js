@@ -5,7 +5,6 @@ const purchaseOrderItemSchema = new mongoose.Schema({
   partName: String,
   partCode: { type: String, trim: true, default: '' },
   brand: String,
-  model: { type: String, default: 'COMMON' },
   qty: { type: Number, required: true, min: 1 },
   received: { type: Number, default: 0, min: 0 },
   status: { type: String, enum: ['pending', 'received', 'partial'], default: 'pending' }

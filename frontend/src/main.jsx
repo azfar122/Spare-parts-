@@ -1,8 +1,11 @@
+import useKeyboardNavigation from './hooks/useKeyboardNavigation.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './styles/index.css';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import AdminSettings from './pages/AdminSettings.jsx';
+import PurchaseItems from './pages/PurchaseItems.jsx';
 import Login from './pages/Login.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import SalesDashboard from './pages/SalesDashboard.jsx';
@@ -22,8 +25,12 @@ function Protected({ role, children }) {
 }
 
 function App() {
+  useKeyboardNavigation();
   return <BrowserRouter><AuthProvider><Routes>
     <Route path="/login" element={<Login />} />
+    <Route path="/admin/settings" element={<Protected role="admin"><AdminSettings /></Protected>} />
+    <Route path="/admin/purchases" element={<Protected role="admin"><PurchaseItems /></Protected>} />
+    <Route path="/sales/purchases" element={<Protected role="sales"><PurchaseItems /></Protected>} />
     <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
     <Route path="/admin/sales" element={<Protected role="admin"><SalesAnalytics /></Protected>} />
     <Route path="/admin/customers" element={<Protected role="admin"><CustomerLedger /></Protected>} />

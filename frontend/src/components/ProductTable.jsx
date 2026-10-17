@@ -64,8 +64,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <th className="w-[17%] p-3 text-left">Product Name</th>
               <th className="w-[10%] p-3 text-left">Part No</th>
               <th className="w-[9%] p-3 text-left">Brand</th>
-              <th className="w-[9%] p-3 text-left">Category</th>
-              <th className="w-[8%] p-3 text-left">Type</th>
+
+
               {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
               <th className="w-[8%] p-3 text-right">Wholesale Price</th>
               <th className="w-[8%] p-3 text-right">Retail Price(RP)</th>
@@ -90,8 +90,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 <td className="break-words p-3 font-semibold">{productName(p)}</td>
                 <td className="break-words p-3 text-slate-600">{partNo(p)}</td>
                 <td className="break-words p-3 text-slate-600">{p.brand || '-'}</td>
-                <td className="break-words p-3 text-slate-600">{p.category || '-'}</td>
-                <td className="break-words p-3 text-slate-600">{p.type || p.model || '-'}</td>
+
+
                 {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
                 <td className="p-3 text-right">Rs {Number(p.wholesalePrice || 0).toLocaleString()}</td>
               <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
@@ -132,7 +132,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
             <th className="w-[6%] px-2 py-3 text-left">Sr</th>
             <th className="w-[23%] px-2 py-3 text-left">Product</th>
             <th className="w-[12%] px-2 py-3 text-left">Part No</th>
-            <th className="w-[12%] px-2 py-3 text-left">Details</th>
+            <th className="w-[12%] px-2 py-3 text-left">Brand</th>
             {showBookingPrice && <th className="w-[9%] px-2 py-3 text-right">Book</th>}
             <th className="w-[10%] px-2 py-3 text-right">Wholesale</th>
             <th className="w-[10%] px-2 py-3 text-right">Retail</th>
@@ -157,7 +157,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <td className="px-2 py-3 font-semibold text-slate-500">{startIndex + index + 1}</td>
               <td className="break-words px-2 py-3 font-semibold leading-snug">{productName(p)}</td>
               <td className="break-words px-2 py-3 text-slate-600">{partNo(p)}</td>
-              <td className="break-words px-2 py-3 text-slate-600">{[p.brand, p.category, p.type || p.model].filter(Boolean).join(' / ') || '-'}</td>
+              <td className="break-words px-2 py-3 text-slate-600">{[p.brand].filter(Boolean).join(' / ') || '-'}</td>
               {showBookingPrice && <td className="px-2 py-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
               <td className="px-2 py-3 text-right">Rs {Number(p.wholesalePrice || 0).toLocaleString()}</td>
               <td className="px-2 py-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>

@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import http from 'http';
 import { Server } from 'socket.io';
 import { connectDb, getDbReadyState } from './utils/db.js';
+import adminSettingsRoutes from './routes/adminSettingsRoutes.js';
+import purchaseRoutes from './routes/purchaseRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import productRoutes from './routes/productRoutes.js';
@@ -39,6 +41,14 @@ const localTwinOrigins = configuredOrigins.map(origin =>
 const allowedOrigins = [...new Set([...configuredOrigins, ...localTwinOrigins])];
 function isAllowedOrigin(origin) {
   if (allowedOrigins.includes(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
+    try {
+      const url = new URL(origin);
+      if (['http:', 'https:'].includes(url.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return true;
+    } catch {
+      return false;
+    }
+  }
   if (process.env.VERCEL === '1') {
     try {
       return new URL(origin).hostname.endsWith('.vercel.app');
@@ -56,7 +66,7 @@ const corsOptions = {
   credentials: true
 };
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, credentials: true }
+  cors: corsOptions
 });
 
 app.set('io', io);
@@ -90,6 +100,8 @@ app.use('/api', requireDb);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/sales', saleRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/warehouses', warehouseRoutes);

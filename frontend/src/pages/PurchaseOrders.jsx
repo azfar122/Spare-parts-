@@ -79,7 +79,6 @@ export default function PurchaseOrders({
           partCode: item.partCode,
           partName: item.partName,
           brand: item.brand || '',
-          model: item.model || 'COMMON',
           qty: Number(item.qty)
         })),
         notes: formData.notes
@@ -191,7 +190,7 @@ export default function PurchaseOrders({
                             key={p._id}
                             onClick={() => {
                               const newItems = [...formData.items];
-                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode || '', partName: p.partName, brand: p.brand || '', model: p.model || 'COMMON' };
+                              newItems[idx] = { ...item, productId: p._id, partCode: p.partCode || '', partName: p.partName, brand: p.brand || '' };
                               setFormData({...formData, items: newItems});
                               setSearchQueries({...searchQueries, [idx]: ''});
                             }}
@@ -219,7 +218,7 @@ export default function PurchaseOrders({
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Brand</label>
-                  <input value={item.brand || item.model || ''} onChange={e => { const newItems = [...formData.items]; newItems[idx].brand = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="AHL" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
+                  <input value={item.brand || ''} onChange={e => { const newItems = [...formData.items]; newItems[idx].brand = e.target.value; setFormData({...formData, items: newItems}); }} placeholder="AHL" className="mt-2 w-full rounded-lg border border-slate-300 p-2 text-sm" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-700">Qty</label>
@@ -257,7 +256,7 @@ export default function PurchaseOrders({
               <div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between mb-2">
                 <div>
                   <p className="font-semibold">{item.partName}</p>
-                  <p className="text-xs text-slate-500">{[item.partCode, item.brand || item.model || '-'].filter(Boolean).join(' • ')}</p>
+                  <p className="text-xs text-slate-500">{[item.partCode, item.brand || '-'].filter(Boolean).join(' • ')}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${item.status === 'received' ? 'bg-green-100 text-green-700' : item.status === 'partial' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{item.status}</span>
               </div>

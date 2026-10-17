@@ -10,7 +10,6 @@ const saleItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   partName: String,
   partCode: String,
-  model: String,
   qty: { type: Number, required: true, min: 1 },
   price: { type: Number, required: true },
   discount: { type: Number, default: 0 },
@@ -19,6 +18,12 @@ const saleItemSchema = new mongoose.Schema({
   warehouse: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
   warehouseName: { type: String, default: '' },
   warehouseAllocations: [warehouseAllocationSchema],
+  costTotal: Number,
+  costEstimated: Boolean,
+  costAllocations: [{
+    batch: { type: mongoose.Schema.Types.ObjectId, ref: 'StockBatch' },
+    qty: Number, unitCost: Number, estimated: Boolean, _id: false
+  }],
   lineTotal: { type: Number, required: true }
 }, { _id: false });
 

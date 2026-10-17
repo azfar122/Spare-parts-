@@ -700,7 +700,7 @@ export default function SalesDashboard() {
             <div className="text-xs text-slate-500">{i.partCode} · Main {i.stock} · {warehouseSummary(i)}</div>
             <div className="grid grid-cols-1 gap-2 mt-3 min-[380px]:grid-cols-3">
               <div><label className="text-xs text-slate-600">Qty</label><input ref={node => { cartFieldRefs.current[`${idx}-qty`] = node; }} min="1" max={Number(i.stock || 0) + Number(i.warehouseQuantity || 0)} value={i.qty} onFocus={() => setSelectedCart({ row: idx, field: 'qty' })} onKeyDown={e => handleCartKeyDown(e, idx, 'qty')} onChange={e=>updateCartQty(idx,e.target.value,i)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
-              <div><label className="text-xs text-slate-600">Selling Price (this sale only)</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} type="number" min="0" step="0.01" value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
+              <div><label className="text-xs text-slate-600">Selling Price</label><input ref={node => { cartFieldRefs.current[`${idx}-price`] = node; }} type="number" min="0" step="0.01" value={i.price} onFocus={() => setSelectedCart({ row: idx, field: 'price' })} onKeyDown={e => handleCartKeyDown(e, idx, 'price')} onChange={e=>update(idx,'price',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
               <div><label className="text-xs text-slate-600">Discount</label><input ref={node => { cartFieldRefs.current[`${idx}-discount`] = node; }} value={i.discount} onFocus={() => setSelectedCart({ row: idx, field: 'discount' })} onKeyDown={e => handleCartKeyDown(e, idx, 'discount')} onChange={e=>update(idx,'discount',e.target.value)} className="mt-1 w-full rounded-xl border p-2 focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20" /></div>
             </div>
             {shortageQty > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -928,7 +928,7 @@ export default function SalesDashboard() {
             />
           </div>
           <div>
-            <label className="text-sm font-semibold text-slate-700">Selling Price (this sale only)</label>
+            <label className="text-sm font-semibold text-slate-700">Selling Price</label>
             <input
               ref={salePriceRef}
               step="0.01"
