@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDailyReportPdf, dailyReportTables } from '../../frontend/src/utils/dailyReportExport.js';
 const report = {
- date: '2026-10-17', generatedAt: '2026-10-17T17:00:00Z', scope: 'All shop sales', openingStockAvailable: false,
+ canViewProfit: true, date: '2026-10-17', generatedAt: '2026-10-17T17:00:00Z', scope: 'All shop sales', openingStockAvailable: false,
  summary: { revenue: 180, profit: 20, bills: 1, receivedAtSale: 100, dueAtSale: 80, discounts: 0, refunds: 0, missingCostItems: 0 },
  khataCollections: 50, products: [{ partName: 'Brake', partCode: 'P1', opening: null, sold: 1, returned: 0, closing: 99, revenue: 180, profit: 20 }],
  sales: [{ receiptNo: 'R-1', createdAt: '2026-10-17T17:00:00Z', customer: { name: 'Customer A', phone: '03000000000', currentBalance: 500 }, soldBy: { name: 'Counter' }, grandTotal: 180, paymentStatus: 'partial', paidAmount: 100, dueAmount: 80, items: [{ partName: 'Brake', partCode: 'P1', qty: 1, price: 180, discount: 0, lineTotal: 180 }] }], payments: [], returns: []
@@ -25,4 +25,14 @@ test('PDF generation paginates a long daily report with all receipt rows', async
  assert.ok(data.startsWith('%PDF'));
  assert.match(data, /R-TEST-69/);
  assert.match(data, /Daily Report/);
+});
+
+test('salesperson PDF omits profit headers and values', async () => {
+ const salesReport = { ...report, canViewProfit: false };
+ const tables = dailyReportTables(salesReport);
+ for (const table of tables) assert.ok(table.head.every(label => !/profit/i.test(label)));
+ assert.equal(tables[0].head.length, tables[0].body[0].length);
+ assert.equal(tables[1].head.length, tables[1].body[0].length);
+ const pdf = await createDailyReportPdf(salesReport);
+ assert.doesNotMatch(pdf.output(), /Gross profit/);
 });

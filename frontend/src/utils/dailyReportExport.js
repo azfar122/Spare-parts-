@@ -2,8 +2,8 @@ const money = value => `Rs ${Number(value || 0).toLocaleString('en-PK', { maximu
 const time = value => new Date(value).toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit' });
 export function dailyReportTables(report) {
   return [
-    { title: 'Daily totals', head: ['Revenue', 'Gross profit', 'Bills', 'Paid at checkout', 'Due at checkout', 'Discounts', 'Refunds / credits', 'Khata collected'], body: [[money(report.summary.revenue), money(report.summary.profit), report.summary.bills, money(report.summary.receivedAtSale), money(report.summary.dueAtSale), money(report.summary.discounts), money(report.summary.refunds), money(report.khataCollections)]] },
-    { title: 'Products sold and stock', head: ['Product', 'Part no.', 'Opening', 'Sold', 'Returned', 'Closing (now)', 'Net sales', 'Gross profit'], body: report.products.map(row => [row.partName, row.partCode, row.opening ?? 'Not recorded', row.sold, row.returned, row.closing ?? 'Not recorded', money(row.revenue), money(row.profit) + (row.missingCost ? ' (recorded costs only)' : '')]) },
+    { title: 'Daily totals', head: ['Revenue', ...(report.canViewProfit ? ['Gross profit'] : []), 'Bills', 'Paid at checkout', 'Due at checkout', 'Discounts', 'Refunds / credits', 'Khata collected'], body: [[money(report.summary.revenue), ...(report.canViewProfit ? [money(report.summary.profit)] : []), report.summary.bills, money(report.summary.receivedAtSale), money(report.summary.dueAtSale), money(report.summary.discounts), money(report.summary.refunds), money(report.khataCollections)]] },
+    { title: 'Products sold and stock', head: ['Product', 'Part no.', 'Opening', 'Sold', 'Returned', 'Closing (now)', 'Net sales', ...(report.canViewProfit ? ['Gross profit'] : [])], body: report.products.map(row => [row.partName, row.partCode, row.opening ?? 'Not recorded', row.sold, row.returned, row.closing ?? 'Not recorded', money(row.revenue), ...(report.canViewProfit ? [money(row.profit) + (row.missingCost ? ' (recorded costs only)' : '')] : [])]) },
     { title: 'Sales, customers and payments', head: ['Receipt / time', 'Customer', 'Sold by', 'Products / qty / price / discount / total', 'Bill total', 'Payment', 'Paid', 'Bill due', 'Current khata'], body: report.sales.map(sale => [
       `${sale.receiptNo}\n${time(sale.createdAt)}`, `${sale.customer?.name || sale.customerName || 'Walk-in Customer'}${sale.customer?.phone ? `\n${sale.customer.phone}` : ''}`, sale.soldBy?.name || sale.soldBy?.username || '-',
       sale.items.map(item => `${item.partName} (${item.partCode || '-'})\n${item.qty} x ${money(item.price)} | Discount ${money(item.discount)} | Total ${money(item.lineTotal)}`).join('\n\n'), money(sale.grandTotal), sale.paymentStatus === 'partial' ? 'Partially paid' : sale.paymentStatus === 'unpaid' ? 'Unpaid' : 'Fully paid', money(sale.paidAmount ?? (sale.paymentStatus === 'paid' ? sale.grandTotal : 0)), money(sale.dueAmount), sale.customer ? money(sale.customer.currentBalance) : '-'
@@ -20,12 +20,12 @@ export async function createDailyReportPdf(report) {
   pdf.setFontSize(10); pdf.text(`${report.date} | ${report.scope} | As of ${time(report.generatedAt)} | Pakistan time`, 12, 23);
   let y = 30;
   const notes = [
-    'Revenue and profit account for returns processed today. Gross profit excludes operating expenses.',
+    report.canViewProfit ? 'Revenue and profit account for returns processed today. Gross profit excludes operating expenses.' : 'Revenue accounts for returns processed today.',
     'Stock combines main store and warehouses. Closing stock is current; sales quantities follow the report scope.',
     'Payments and bill dues are at checkout. Khata is the current customer balance: do not sum repeated balances.'
   ];
   if (!report.openingStockAvailable) notes.push('Opening quantities without verified tracking show Not recorded.');
-  if (report.summary.missingCostItems) notes.push(`Profit excludes ${report.summary.missingCostItems} sale/return items without recorded costs; revenue includes them.`);
+  if (report.canViewProfit && report.summary.missingCostItems) notes.push(`Profit excludes ${report.summary.missingCostItems} sale/return items without recorded costs; revenue includes them.`);
   for (const note of notes) {
     const lines = pdf.splitTextToSize(note, 273); pdf.setFontSize(8); pdf.text(lines, 12, y); y += lines.length * 4 + 1;
   }

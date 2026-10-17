@@ -1,3 +1,4 @@
+import { dailyReportForRole } from '../utils/dailyReportAccess.js';
 import express from 'express';
 import Sale from '../models/Sale.js';
 import Return from '../models/Return.js';
@@ -42,10 +43,10 @@ router.get('/daily', async (req, res) => {
       const opening = snapshot ? (snapshot.reliable ? snapshot.opening : null) : (tracking.startedAt <= start ? closing : null);
       return { ...row, opening, closing };
     });
-    res.json({ ...report, date, generatedAt: now, timezone: 'Asia/Karachi', scope: own ? 'Your sales' : 'All shop sales', sales, returns, payments,
+    res.json(dailyReportForRole({ ...report, date, generatedAt: now, timezone: 'Asia/Karachi', scope: own ? 'Your sales' : 'All shop sales', sales, returns, payments,
       khataCollections: payments.reduce((sum, entry) => sum + Number(entry.credit || 0), 0),
       openingStockAvailable: tracking.startedAt <= start
-    });
+    }, req.user.role));
   } catch (error) {
     console.error('Daily report failed:', error.name);
     res.status(500).json({ message: 'Could not generate the daily report. Please try again.' });
