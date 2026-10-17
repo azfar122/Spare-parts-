@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import { consumeFifo } from '../utils/stockCost.js';
 import { buildProfitSummary } from '../utils/profitSummary.js';
 import express from 'express';
@@ -234,6 +235,7 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
     for (const item of items) {
       const product = await Product.findById(item.productId).session(session).lean();
       if (!product) throw new Error('Product not found');
+      await captureDailyOpening(product, session);
       const productData = serializeProduct(product);
       const qty = Number(item.qty);
       const discount = Number(item.discount || 0);

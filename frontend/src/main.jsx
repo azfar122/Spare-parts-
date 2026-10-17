@@ -1,3 +1,4 @@
+import DailyReport from './pages/DailyReport.jsx';
 import useKeyboardNavigation from './hooks/useKeyboardNavigation.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -27,6 +28,8 @@ function Protected({ role, children }) {
 function App() {
   useKeyboardNavigation();
   return <BrowserRouter><AuthProvider><Routes>
+    <Route path="/admin/daily-report" element={<Protected role="admin"><DailyReport /></Protected>} />
+    <Route path="/sales/daily-report" element={<Protected role="sales"><DailyReport /></Protected>} />
     <Route path="/login" element={<Login />} />
     <Route path="/admin/settings" element={<Protected role="admin"><AdminSettings /></Protected>} />
     <Route path="/admin/purchases" element={<Protected role="admin"><PurchaseItems /></Protected>} />

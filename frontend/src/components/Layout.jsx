@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { AlertTriangle, Bell, BookOpen, Building2, LogOut, Menu, ShieldCheck, Store, BarChart3, Package, PackagePlus, X } from 'lucide-react';
+import { AlertTriangle, Bell, BookOpen, Building2, LogOut, Menu, ShieldCheck, Store, BarChart3, Package, PackagePlus, FileText, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import logo from '../assets/atlas-honda-logo.png';
 
 export default function Layout({ title, subtitle, children, wide = false, headerAction = null }) {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lowStockItems, setLowStockItems] = useState([]);
@@ -81,9 +82,10 @@ export default function Layout({ title, subtitle, children, wide = false, header
           <div className="min-w-0"><h1 className="truncate text-base font-bold sm:text-xl">Asif Auto Traders</h1><p className="hidden text-sm text-slate-300 sm:block">Inventory, sales receipts and returns</p></div>
         </div>
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
-          <div className="hidden gap-2 lg:flex">
+          <div className="hidden gap-2 2xl:flex">
             <NavItems />
           </div>
+          {user && <button type="button" onClick={() => navigate(`${user.role === 'admin' ? '/admin' : '/sales'}/daily-report?at=${Date.now()}`)} className="no-print flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2.5 text-sm font-semibold hover:bg-white/20" title="Today's daily report"><FileText size={18}/><span className="hidden sm:inline">Daily Report</span><span className="sr-only sm:hidden">Daily Report</span></button>}
           {user && <button
             type="button"
             onClick={() => {
@@ -98,11 +100,11 @@ export default function Layout({ title, subtitle, children, wide = false, header
           </button>}
           <span className="hidden text-sm bg-white/10 px-3 py-2 rounded-full items-center gap-2 sm:flex"><ShieldCheck size={16}/>{user?.role}</span>
           <button onClick={logout} className="no-print hidden rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2 text-sm gap-2 sm:flex"><LogOut size={16}/>Logout</button>
-          {user && <button type="button" onClick={() => setMobileMenuOpen(true)} className="no-print rounded-xl bg-white/10 p-2.5 hover:bg-white/20 lg:hidden" aria-label="Open menu"><Menu size={20}/></button>}
+          {user && <button type="button" onClick={() => setMobileMenuOpen(true)} className="no-print rounded-xl bg-white/10 p-2.5 hover:bg-white/20 2xl:hidden" aria-label="Open menu"><Menu size={20}/></button>}
         </div>
       </div>
     </div>
-    {mobileMenuOpen && <div className="no-print fixed inset-0 z-[75] lg:hidden">
+    {mobileMenuOpen && <div className="no-print fixed inset-0 z-[75] 2xl:hidden">
       <button type="button" className="absolute inset-0 bg-slate-950/50" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" />
       <aside className="absolute right-0 top-0 flex h-full w-[min(340px,88vw)] flex-col bg-brand-dark p-4 text-white shadow-2xl">
         <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-4">

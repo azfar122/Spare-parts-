@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import express from 'express';
 import Warehouse from '../models/Warehouse.js';
 import WarehouseStock from '../models/WarehouseStock.js';
@@ -82,6 +83,7 @@ router.put('/:warehouseId/stock/:productId', requireRole('admin'), async (req, r
     if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
+    await captureDailyOpening(product.toObject());
     const stock = await WarehouseStock.findOneAndUpdate(
       { warehouse: warehouse._id, product: product._id },
       { quantity, updatedBy: req.user._id },

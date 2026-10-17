@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import StockBatch from '../models/StockBatch.js';
 import { returnedCosts, reconcileBatches } from '../utils/stockCost.js';
 import express from 'express';
@@ -84,6 +85,7 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
 
       const product = await Product.findById(item.productId).session(session).lean();
       if (!product) throw new Error('Product not found');
+      await captureDailyOpening(product, session);
       const productData = serializeProduct(product);
 
       const calculatedRefund = (Number(saleItem.lineTotal || 0) / Number(saleItem.qty || 1)) * item.qty;

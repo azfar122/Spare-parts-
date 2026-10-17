@@ -261,3 +261,9 @@ Admin **Sales** reports show cost and gross profit by bill, purchase-cost breakd
 Existing inventory without cost batches uses its current booking price as an **estimated** opening cost. Stock added outside Purchase Items (including older order receiving and manual stock adjustments) also uses an estimated booking cost when next reconciled. Use Purchase Items for accurately costed new purchases. Older bills without saved cost allocations show **Not recorded** and are excluded from profit totals; historical costs are not reconstructed.
 
 Purchase and sale transactions require MongoDB Atlas or a replica set. Run accounting checks with `npm -C backend test`.
+
+## Ongoing daily report
+
+The header's **Daily Report** button shows today's report using Pakistan time (Asia/Karachi), up to the time the report is generated. Clicking again or choosing Refresh reloads it; an open report rolls over at midnight. Admins see all shop sales, and salespeople see their own sales. Reports show sales revenue, recorded-cost gross profit, item quantities and selling prices, checkout payments, bill dues, current customer khata, separate khata collections, and returns processed today (including returns against older receipts).
+
+Opening and current closing stock combine the main store and warehouses. Daily opening snapshots are captured before app stock changes, including purchases, order receiving, sales, returns, manual adjustments, and CSV updates. Full-day opening stock requires tracking to have been active before that day's midnight; previously untracked opening quantities show **Not recorded**. On salesperson reports, stock quantities remain shop-wide while sale quantities cover that salesperson. Changes made directly in MongoDB bypass stock tracking. Pending khata is a current customer balance and must not be summed across repeated receipts for the same customer.

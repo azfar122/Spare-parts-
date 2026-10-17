@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
@@ -246,6 +247,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
     }
 
     const [product] = await Product.create([payload], { session });
+    await captureDailyOpening(product.toObject(), session, true);
     const warehouses = await Warehouse.find({ active: { $ne: false } }).session(session);
 
     if (warehouses.length) {
@@ -283,6 +285,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
     const existing = await Product.findById(req.params.id).lean();
     if (!existing) return res.status(404).json({ message: 'Product not found' });
+    await captureDailyOpening(existing);
     const update = normalizeProductUpdate(req.body, existing);
     const duplicateProduct = await Product.findOne(duplicateProductQuery(update, existing._id)).lean();
     if (duplicateProduct) {

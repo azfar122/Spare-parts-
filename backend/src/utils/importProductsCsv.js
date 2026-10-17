@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { captureDailyOpening } from './dailyStock.js';
 import fs from 'fs';
 import csv from 'csv-parser';
 import Product from '../models/Product.js';
@@ -25,6 +26,8 @@ fs.createReadStream(path)
       const partName = firstValue(row, ['Product name', 'Product Name', 'Part Name', 'partName', 'part name']);
       const partCode = firstValue(row, ['PartNo', 'partNo', 'Part No', 'Part No.', 'Part Number', 'Part Code', 'partCode', 'part code']);
       if (!partName || !partCode) continue;
+      const existing = await Product.findOne({ partCode: String(partCode).trim() }).lean();
+      if (existing) await captureDailyOpening(existing);
       await Product.updateOne(
         { partCode: String(partCode).trim() },
         { $set: {

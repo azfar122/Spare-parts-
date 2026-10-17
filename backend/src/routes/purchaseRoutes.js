@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
@@ -36,6 +37,7 @@ router.post('/', async (req, res) => {
         if (!warehouse) throw new Error('Select an active warehouse');
       }
       let product;
+      let isNew = false;
       if (req.body.productId) {
         product = await Product.findOne({ _id: req.body.productId, active: { $ne: false } }).session(session).lean();
         if (!product) throw new Error('Product not found');
@@ -50,7 +52,9 @@ router.post('/', async (req, res) => {
         if (await Product.findOne({ $or: [{ partCode }, { PartNo: partCode }, { 'Part No': partCode }] }).session(session)) throw new Error('Part number already exists. Select the existing product.');
         const [created] = await Product.create([{ partName, partCode, brand: String(input.brand || ''), bookingPrice: unitCost, mrp, wholesalePrice, quantity: 0 }], { session });
         product = created.toObject();
+        isNew = true;
       }
+      await captureDailyOpening(product, session, isNew);
       const stock = warehouse ? await WarehouseStock.findOne({ product: product._id, warehouse: warehouse._id }).session(session) : null;
       const current = warehouse ? Number(stock?.quantity || 0) : productStock(product);
       await reconcileBatches(product, warehouse?._id, current, session);

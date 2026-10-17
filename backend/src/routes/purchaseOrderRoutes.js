@@ -1,3 +1,4 @@
+import { captureDailyOpening } from '../utils/dailyStock.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import PurchaseOrder from '../models/PurchaseOrder.js';
@@ -15,6 +16,7 @@ async function addProductStock(productId, received, options = {}) {
   if (options.session) query = query.session(options.session);
   const product = await query;
   if (!product) throw new Error('Product not found');
+  await captureDailyOpening(product, options.session || null);
   const current = Number(serializeProduct(product).quantity || 0);
   await Product.collection.updateOne(
     { _id: product._id },
@@ -31,6 +33,7 @@ async function addWarehouseStock(productId, warehouseId, received, userId, optio
   if (!product) throw new Error('Product not found');
   if (!warehouse || warehouse.active === false) throw new Error('Warehouse not found');
 
+  await captureDailyOpening(product.toObject(), options.session || null);
   const stock = await WarehouseStock.findOne({ product: product._id, warehouse: warehouse._id }).session(options.session || null);
   if (stock) {
     stock.quantity = Number(stock.quantity || 0) + Number(received || 0);
