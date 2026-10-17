@@ -19,6 +19,7 @@ export function serializeProduct(product) {
     brand,
     category,
     type,
+    wholesalePrice: item?.wholesalePrice ?? 0,
     bookingPrice,
     mrp,
     quantity,

@@ -11,3 +11,4 @@ csv/
 .vscode/
 *.swp
 *.swo
+.env*

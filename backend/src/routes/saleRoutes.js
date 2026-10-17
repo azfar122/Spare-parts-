@@ -281,6 +281,7 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       }
 
       const price = Number(item.price ?? productPrice(product));
+      if (!Number.isFinite(price) || price < 0) throw new Error('Selling price must be a valid amount of zero or greater');
       const gross = price * qty;
       const lineTotal = Math.max(0, gross - discount);
       subtotal += gross;

@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema({
   category: { type: String, default: '', trim: true, index: true },
   type: { type: String, default: '', trim: true, index: true },
   bookingPrice: { type: Number, default: 0 },
+  wholesalePrice: { type: Number, default: 0, min: 0 },
   mrp: { type: Number, default: 0 },
   minOrderQty: { type: Number, default: 1 },
   minimumQuantity: { type: Number, default: 0, min: 0 },

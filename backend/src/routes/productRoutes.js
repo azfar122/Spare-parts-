@@ -20,6 +20,7 @@ function normalizeProductPayload(body) {
     brand: String(body.brand || '').trim(),
     category: String(body.category || '').trim(),
     type: String(body.type || body.model || '').trim(),
+    wholesalePrice: Number(body.wholesalePrice ?? 0),
     bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
@@ -28,6 +29,7 @@ function normalizeProductPayload(body) {
     description: String(body.description || '').trim()
   };
 
+  if (!Number.isFinite(payload.wholesalePrice) || payload.wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
   if (!payload.partName) throw new Error('Part name is required');
   if (!payload.model) throw new Error('Model is required');
   if (!payload.partCode) throw new Error('Part code is required');
@@ -48,10 +50,12 @@ function normalizeProductUpdate(body, existing = {}) {
   const type = String(body.type || body.Type || body.model || existing.type || existing.Type || existing.model || '').trim();
   const mrp = Number(body.mrp ?? body.RP ?? existing.mrp ?? existing.RP ?? 0);
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
+  const wholesalePrice = Number(body.wholesalePrice ?? existing.wholesalePrice ?? 0);
   const quantity = Number(body.quantity ?? body['Stock Qty'] ?? existing.quantity ?? existing['Stock Qty'] ?? 0);
   const minOrderQty = Number(body.minOrderQty || existing.minOrderQty || 1);
   const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? existing.minimumQuantity ?? existing.minimumQty ?? existing.minQuantity ?? existing['Minimum Quantity'] ?? 0);
 
+  if (!Number.isFinite(wholesalePrice) || wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
   if (!partName) throw new Error('Product name is required');
   if (!Number.isFinite(mrp) || mrp < 0) throw new Error('Retail price must be a valid amount');
   if (!Number.isFinite(bookingPrice) || bookingPrice < 0) throw new Error('Booking price must be a valid amount');
@@ -66,6 +70,7 @@ function normalizeProductUpdate(body, existing = {}) {
     category,
     type,
     bookingPrice,
+    wholesalePrice,
     mrp,
     minOrderQty,
     minimumQuantity,

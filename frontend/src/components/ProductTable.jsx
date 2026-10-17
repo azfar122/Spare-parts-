@@ -67,6 +67,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <th className="w-[9%] p-3 text-left">Category</th>
               <th className="w-[8%] p-3 text-left">Type</th>
               {showBookingPrice && <th className="w-[8%] p-3 text-right">Booking Price</th>}
+              <th className="w-[8%] p-3 text-right">Wholesale Price</th>
               <th className="w-[8%] p-3 text-right">Retail Price(RP)</th>
               <th className="w-[6%] p-3 text-right">Stock Qty</th>
               <th className="w-[6%] p-3 text-right">Total Qty</th>
@@ -92,7 +93,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
                 <td className="break-words p-3 text-slate-600">{p.category || '-'}</td>
                 <td className="break-words p-3 text-slate-600">{p.type || p.model || '-'}</td>
                 {showBookingPrice && <td className="p-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
-                <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
+                <td className="p-3 text-right">Rs {Number(p.wholesalePrice || 0).toLocaleString()}</td>
+              <td className="p-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
                 <td className="p-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
                 <td className={`p-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{totalQty(p).toLocaleString()}</td>
                 <td className="p-3 text-right">{minimumQty(p).toLocaleString()}</td>
@@ -123,8 +125,8 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
         Booking Price
       </button>
     </div>}
-    <div className="max-w-full overflow-hidden">
-      <table className="w-full table-fixed text-[11px] sm:text-xs">
+    <div className="max-w-full overflow-x-auto">
+      <table className="w-full min-w-[900px] table-fixed text-[11px] sm:text-xs">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
             <th className="w-[6%] px-2 py-3 text-left">Sr</th>
@@ -132,6 +134,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
             <th className="w-[12%] px-2 py-3 text-left">Part No</th>
             <th className="w-[12%] px-2 py-3 text-left">Details</th>
             {showBookingPrice && <th className="w-[9%] px-2 py-3 text-right">Book</th>}
+            <th className="w-[10%] px-2 py-3 text-right">Wholesale</th>
             <th className="w-[10%] px-2 py-3 text-right">Retail</th>
             <th className="w-[7%] px-2 py-3 text-right">Shop</th>
             <th className="w-[7%] px-2 py-3 text-right">Total</th>
@@ -156,6 +159,7 @@ export default function ProductTable({ products, onDetail, onEdit, onDelete, sal
               <td className="break-words px-2 py-3 text-slate-600">{partNo(p)}</td>
               <td className="break-words px-2 py-3 text-slate-600">{[p.brand, p.category, p.type || p.model].filter(Boolean).join(' / ') || '-'}</td>
               {showBookingPrice && <td className="px-2 py-3 text-right">Rs {Number(p.bookingPrice || 0).toLocaleString()}</td>}
+              <td className="px-2 py-3 text-right">Rs {Number(p.wholesalePrice || 0).toLocaleString()}</td>
               <td className="px-2 py-3 text-right">Rs {Number(p.mrp || 0).toLocaleString()}</td>
               <td className="px-2 py-3 text-right font-semibold">{Number(p.quantity || 0).toLocaleString()}</td>
               <td className={`px-2 py-3 text-right font-semibold ${isLowStock(p) ? 'text-red-600' : ''}`}>{availableQty.toLocaleString()}</td>

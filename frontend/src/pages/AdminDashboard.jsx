@@ -95,6 +95,7 @@ export default function AdminDashboard() {
     const form = new FormData(formElement);
     const body = Object.fromEntries(form.entries());
     body.model = body.type || body.model || 'COMMON';
+    body.wholesalePrice = Number(body.wholesalePrice || 0);
     body.mrp = Number(body.mrp);
     body.bookingPrice = Number(body.bookingPrice || 0);
     body.quantity = Number(body.quantity);
@@ -184,6 +185,7 @@ export default function AdminDashboard() {
     const form = new FormData(e.currentTarget);
     const body = Object.fromEntries(form.entries());
     body.model = body.type || body.model || 'COMMON';
+    body.wholesalePrice = Number(body.wholesalePrice || 0);
     body.mrp = Number(body.mrp); body.bookingPrice = Number(body.bookingPrice || 0); body.quantity = Number(body.quantity); body.minOrderQty = Number(body.minOrderQty || 1); body.minimumQuantity = Number(body.minimumQuantity || 0);
     try {
       setSavingEdit(true);
@@ -380,6 +382,7 @@ export default function AdminDashboard() {
       <label className="text-sm font-medium">Category<input name="category" defaultValue={editing.category || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Type<input name="type" defaultValue={editing.type || editing.model || ''} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Booking Price<input name="bookingPrice" type="number" min="0" step="0.01" defaultValue={editing.bookingPrice || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
+      <label className="text-sm font-medium">Wholesale Price<input name="wholesalePrice" type="number" min="0" step="0.01" defaultValue={editing.wholesalePrice || 0} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Retail Price(RP)<input name="mrp" type="number" min="0" step="0.01" defaultValue={editing.mrp} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Stock Qty<input name="quantity" type="number" min="0" defaultValue={editing.quantity} className="mt-1 w-full rounded-xl border p-3" /></label>
       <label className="text-sm font-medium">Min Order Qty<input name="minOrderQty" type="number" min="1" defaultValue={editing.minOrderQty} className="mt-1 w-full rounded-xl border p-3" /></label>
@@ -398,6 +401,7 @@ export default function AdminDashboard() {
         <label className="text-sm font-medium">Category<input name="category" placeholder="e.g., Engine" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Type<input name="type" placeholder="e.g., COMMON" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Booking Price <span className="text-red-500">*</span><input name="bookingPrice" type="number" placeholder="e.g., 450" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
+        <label className="text-sm font-medium">Wholesale Price<input name="wholesalePrice" type="number" min="0" step="0.01" defaultValue="0" className="mt-1 w-full rounded-xl border p-3" /></label>
         <label className="text-sm font-medium">Retail Price(RP) <span className="text-red-500">*</span><input name="mrp" type="number" placeholder="e.g., 500" className="mt-1 w-full rounded-xl border p-3" min="0" step="0.01" required /></label>
         <label className="text-sm font-medium">Stock Qty <span className="text-red-500">*</span><input name="quantity" type="number" placeholder="e.g., 100" className="mt-1 w-full rounded-xl border p-3" min="1" required /></label>
         <label className="text-sm font-medium">Min Order Qty <span className="text-slate-400">(optional)</span><input name="minOrderQty" type="number" placeholder="e.g., 1" className="mt-1 w-full rounded-xl border p-3" min="1" /></label>
