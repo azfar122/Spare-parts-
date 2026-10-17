@@ -31,7 +31,7 @@ export default function useKeyboardNavigation() {
         event.preventDefault(); focus(items[Math.max(0, Math.min(items.length - 1, next))]); return;
       }
       if (event.altKey) return;
-      const list = target.closest('[role="listbox"]') || (target.tagName === 'INPUT' ? target.parentElement.querySelector('[role="listbox"]') : null);
+      const list = target.closest('[role="listbox"]') || (target.tagName === 'INPUT' ? document.getElementById(target.getAttribute('aria-controls')) || target.parentElement.querySelector('[role="listbox"]') : null);
       if (list && ['ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) {
         const options = controls(list);
         if (event.key === 'Escape') { event.preventDefault(); focus(list.parentElement.querySelector('input')); return; }

@@ -1,3 +1,4 @@
+import SaleCustomerPicker from '../components/SaleCustomerPicker.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ReceiptText, RotateCcw, Search, Trash2, X } from 'lucide-react';
@@ -33,7 +34,6 @@ export default function SalesDashboard() {
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const [selectedCart, setSelectedCart] = useState({ row: -1, field: 'qty' });
   const [receipt, setReceipt] = useState(null);
-  const [customers, setCustomers] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [warehouseOptions, setWarehouseOptions] = useState({});
   const [customerSearch, setCustomerSearch] = useState('');
@@ -72,6 +72,7 @@ export default function SalesDashboard() {
   const productSearchRef = useRef(null);
   const productSearchInputRef = useRef(null);
   const productSearchNavigatingRef = useRef(false);
+  const saleCustomerSnapshotRef = useRef(null);
   const saleQtyRef = useRef(null);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
@@ -101,18 +102,12 @@ export default function SalesDashboard() {
     }
   }
 
-  async function loadCustomers(search = customerSearch) {
-    const r = await api.get('/customers', { params: { q: search, limit: 20 } });
-    setCustomers(r.data.items || []);
-  }
-
   async function loadWarehouses() {
     const r = await api.get('/warehouses');
     setWarehouses(r.data || []);
   }
 
   useEffect(() => { load(1); }, [q]);
-  useEffect(() => { loadCustomers(''); }, []);
   useEffect(() => { loadWarehouses(); }, []);
   useEffect(() => {
     const s = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
@@ -150,6 +145,7 @@ export default function SalesDashboard() {
   }, [loadingProducts, receipt, returnForm, saleModalProduct, products, selectedProductIndex]);
   useEffect(() => {
     if (!saleModalProduct) return;
+    if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer by name or phone before adding this product.' });
     window.requestAnimationFrame(() => saleQtyRef.current?.select());
   }, [saleModalProduct]);
   useEffect(() => {
@@ -171,6 +167,9 @@ export default function SalesDashboard() {
 
   function openSaleModal(product) {
     if (!product || Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) <= 0) return;
+    saleCustomerSnapshotRef.current = cart.length
+      ? { customerMode, selectedCustomer, customerSearch, paymentStatus, paidAmount }
+      : { customerMode: 'walk-in', selectedCustomer: null, customerSearch: '', paymentStatus: 'paid', paidAmount: '' };
     setSaleModalProduct(product);
     setSaleDraft({
       qty: '1',
@@ -179,7 +178,16 @@ export default function SalesDashboard() {
     });
   }
 
-  function closeSaleModal() {
+  function closeSaleModal(keepCustomer = false) {
+    if (keepCustomer !== true && saleCustomerSnapshotRef.current) {
+      const previous = saleCustomerSnapshotRef.current;
+      setCustomerMode(previous.customerMode);
+      setSelectedCustomer(previous.selectedCustomer);
+      setCustomerSearch(previous.customerSearch);
+      setPaymentStatus(previous.paymentStatus);
+      setPaidAmount(previous.paidAmount);
+    }
+    saleCustomerSnapshotRef.current = null;
     setSaleModalProduct(null);
     setSaleDraft({ qty: '1', price: '', discount: '0' });
   }
@@ -230,6 +238,7 @@ export default function SalesDashboard() {
   function submitSaleModal(e) {
     e.preventDefault();
     if (!saleModalProduct) return;
+    if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer by name or phone.' });
     const qty = Number(saleDraft.qty || 0);
     const availableQty = Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0);
     if (qty <= 0) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Enter a quantity greater than zero.' });
@@ -237,7 +246,7 @@ export default function SalesDashboard() {
     if (saleDraft.price === '' || !Number.isFinite(Number(saleDraft.price)) || Number(saleDraft.price) < 0) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Enter a valid selling price of zero or greater.' });
     addSale(saleModalProduct, saleDraft);
     setQ('');
-    closeSaleModal();
+    closeSaleModal(true);
     scrollToProductSearch();
   }
 
@@ -761,32 +770,10 @@ export default function SalesDashboard() {
             <div className="flex justify-between text-lg"><span>Total</span><b>Rs {billTotal.toLocaleString()}</b></div>
           </div>
           <div className="border-t pt-4 space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-600">Customer</label>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => { setCustomerMode('walk-in'); setSelectedCustomer(null); setPaymentStatus('paid'); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${customerMode === 'walk-in' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Walk-in</button>
-                <button type="button" onClick={() => { setCustomerMode('existing'); loadCustomers(''); }} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${customerMode === 'existing' ? 'bg-brand-dark text-white' : 'hover:bg-slate-50'}`}>Existing</button>
-              </div>
-            </div>
-            {customerMode === 'existing' && <div>
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); loadCustomers(e.target.value); }} placeholder="Search customer name or phone" className="w-full rounded-xl border py-2 pl-9 pr-3 text-sm" />
-              </div>
-              <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border bg-white">
-                {customers.map(customer => (
-                  <button key={customer._id} type="button" onClick={() => setSelectedCustomer(customer)} className={`w-full text-left p-3 border-b last:border-b-0 hover:bg-slate-50 ${selectedCustomer?._id === customer._id ? 'bg-slate-50' : ''}`}>
-                    <div className="flex justify-between gap-2">
-                      <span className="font-semibold text-sm">{customer.name}</span>
-                      <span className="text-xs font-semibold text-brand-red">Rs {Number(customer.currentBalance || 0).toLocaleString()}</span>
-                    </div>
-                    <p className="text-xs text-slate-500">{customer.phone || 'No phone'}</p>
-                  </button>
-                ))}
-                {customers.length === 0 && <p className="p-3 text-sm text-slate-500">No customers found.</p>}
-              </div>
-              {selectedCustomer && <p className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">Selected: <b>{selectedCustomer.name}</b> · Current balance Rs {Number(selectedCustomer.currentBalance || 0).toLocaleString()}</p>}
-            </div>}
+            <SaleCustomerPicker mode={customerMode} onModeChange={mode => {
+              setCustomerMode(mode); setCustomerSearch('');
+              if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
+            }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
             <div>
               <label className="text-xs font-semibold text-slate-600">Payment</label>
               <div className="mt-2 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
@@ -892,6 +879,10 @@ export default function SalesDashboard() {
 
     {saleModalProduct && <Modal title="Sell Product" onClose={closeSaleModal}>
       <form onSubmit={submitSaleModal} className="grid gap-5">
+        <SaleCustomerPicker mode={customerMode} onModeChange={mode => {
+              setCustomerMode(mode); setCustomerSearch('');
+              if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
+            }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
         <div className="rounded-2xl border bg-slate-50 p-4">
           <p className="break-words text-lg font-bold text-slate-900">{saleModalProduct.partName}</p>
           <p className="mt-1 text-sm text-slate-500">
