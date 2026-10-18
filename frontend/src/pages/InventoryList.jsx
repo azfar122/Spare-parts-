@@ -4,6 +4,8 @@ import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import { Trash2 } from 'lucide-react';
 
 const columns = [
   { key: 'partName', label: 'Product Name', required: true },
@@ -33,6 +35,8 @@ export default function InventoryList() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const dirtyCount = Object.keys(drafts).length;
 
   async function load() {
@@ -78,7 +82,7 @@ export default function InventoryList() {
 
   async function save(event) {
     event.preventDefault();
-    if (!canEdit || saving) return;
+    if (!canEdit || saving || deleteTarget) return;
     const changes = Object.entries(drafts);
     // Validate hidden search results as well as the visible inputs.
     for (const [id, values] of changes) {
@@ -121,6 +125,24 @@ export default function InventoryList() {
     }
   }
 
+  async function deleteProduct() {
+    if (!canEdit || !deleteTarget || saving || deleting) return;
+    const product = deleteTarget;
+    setDeleting(true);
+    try {
+      await api.delete(`/products/${product._id}`);
+      setProducts(current => current.filter(item => item._id !== product._id));
+      setDrafts(current => { const next = { ...current }; delete next[product._id]; return next; });
+      setDeleteTarget(null);
+      setNotice({ type: 'success', title: 'Product Deleted', message: `${product.partName || product.partCode || 'Product'} was removed from inventory.` });
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Delete Failed', message: err.response?.data?.message || err.message });
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return <Layout title="Inventory List" subtitle={canEdit ? 'Edit product details, prices and shop stock directly in the full inventory list.' : 'View all product details, prices and shop stock in one list.'} wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     {loading ? <LoadingState label="Loading full inventory..." /> : loadFailed ?
@@ -129,13 +151,13 @@ export default function InventoryList() {
         <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm">
           <input type="search" aria-label="Search inventory" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search product name, part no or brand" className="min-w-0 flex-1 rounded-xl border p-3" />
           <span className="text-sm text-slate-500">{visibleProducts.length} of {products.length} products{canEdit && ` · ${dirtyCount} unsaved`}</span>
-          {canEdit && <button type="submit" disabled={saving || !dirtyCount} className="flex items-center gap-2 rounded-xl bg-brand-red px-5 py-3 font-semibold text-white disabled:opacity-50">
+          {canEdit && <button type="submit" disabled={saving || Boolean(deleteTarget) || !dirtyCount} className="flex items-center gap-2 rounded-xl bg-brand-red px-5 py-3 font-semibold text-white disabled:opacity-50">
             {saving && <ButtonSpinner />}{saving ? 'Saving...' : 'Save Changes'}
           </button>}
         </div>
         <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50"><tr>{columns.map(column => <th key={column.key} scope="col" className="whitespace-nowrap px-3 py-4 text-left font-semibold">{column.label}</th>)}</tr></thead>
+            <thead className="bg-slate-50"><tr>{columns.map(column => <th key={column.key} scope="col" className="whitespace-nowrap px-3 py-4 text-left font-semibold">{column.label}</th>)}{canEdit && <th scope="col" className="px-3 py-4 text-left font-semibold">Action</th>}</tr></thead>
             <tbody>{visibleProducts.map(product => {
               const values = drafts[product._id] || editableValues(product);
               return <tr key={product._id} className={`border-t ${drafts[product._id] ? 'bg-amber-50' : ''}`}>
@@ -147,11 +169,20 @@ export default function InventoryList() {
                     className={`w-full rounded-lg border border-slate-200 bg-white p-2 focus:border-brand-red focus:outline-none disabled:opacity-60 ${column.key === 'partName' ? 'min-w-[240px]' : 'min-w-[140px]'}`} /> :
                     <span className="block min-w-[120px] whitespace-nowrap p-2">{values[column.key] || '—'}</span>}
                 </td>)}
+                {canEdit && <td className="p-2">
+                  <button type="button" disabled={saving || deleting} onClick={() => setDeleteTarget(product)}
+                    aria-label={`Delete ${product.partName || product.partCode}`} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-brand-red hover:bg-red-50 disabled:opacity-50">
+                    <Trash2 size={16} />Delete
+                  </button>
+                </td>}
               </tr>;
             })}</tbody>
           </table>
           {!visibleProducts.length && <p className="p-8 text-center text-slate-500">{products.length ? 'No products match your search.' : 'No products in inventory.'}</p>}
         </div>
       </form>}
+    {deleteTarget && <ConfirmModal title="Delete Product" destructive confirmLabel="Delete" busy={deleting}
+      message={`Delete ${deleteTarget.partName || deleteTarget.partCode || 'this product'}${deleteTarget.partCode ? ` (${deleteTarget.partCode})` : ''} from inventory?${drafts[deleteTarget._id] ? ' Unsaved edits for this product will be discarded.' : ''} Sales history will remain available.`}
+      onConfirm={deleteProduct} onCancel={() => { if (!deleting) setDeleteTarget(null); }} />}
   </Layout>;
 }

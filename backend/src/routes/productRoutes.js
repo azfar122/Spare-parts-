@@ -309,7 +309,7 @@ router.put('/:id', requireRole('admin', 'sales'), async (req, res) => {
   }
 });
 
-router.delete('/:id', requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireRole('admin', 'sales'), async (req, res) => {
   try {
     const product = await Product.findByIdAndUpdate(
       req.params.id,

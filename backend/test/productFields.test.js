@@ -125,3 +125,41 @@ test('saving an inventory edit updates the same record without inserting a row',
   }, () => assert.fail('Guest must not edit inventory'));
   assert.equal(deniedStatus, 403);
 });
+test('admin and sales can remove an inventory product while keeping its record', async () => {
+  const source = fs.readFileSync(new URL('../src/routes/productRoutes.js', import.meta.url), 'utf8');
+  let authorize;
+  let handler;
+  const rows = ['admin', 'sales'].map(role => ({ _id: role, partName: 'Brake', partCode: role, active: true }));
+  const router = {
+    use() {}, get() {}, post() {}, put() {},
+    delete(path, middleware, callback) { authorize = middleware; handler = callback; }
+  };
+  const context = vm.createContext({
+    express: { Router: () => router }, requireAuth() {}, requireRole, serializeProduct,
+    Product: {
+      findByIdAndUpdate(id, update) {
+        const row = rows.find(product => product._id === id);
+        Object.assign(row, update);
+        return { lean: async () => row };
+      }
+    }
+  });
+  vm.runInContext(source.replace(/^import .*;\n/gm, '').replace('export default router;', ''), context);
+  for (const role of ['admin', 'sales']) {
+    let allowed = false;
+    let response;
+    let emitted;
+    const req = { user: { role }, params: { id: role }, app: { get: () => ({ emit(event) { emitted = event; } }) } };
+    const res = { json(data) { response = data; }, status(code) { assert.fail(`Unexpected HTTP ${code}`); } };
+    authorize(req, res, () => { allowed = true; });
+    assert.equal(allowed, true);
+    await handler(req, res);
+    assert.equal(response.product._id, role);
+    assert.equal(response.product.active, false);
+    assert.equal(rows.length, 2);
+    assert.equal(emitted, 'inventory:bulk-update');
+  }
+  let denied;
+  authorize({ user: { role: 'guest' } }, { status(code) { denied = code; return this; }, json() {} }, () => assert.fail('Guest must not delete inventory'));
+  assert.equal(denied, 403);
+});
