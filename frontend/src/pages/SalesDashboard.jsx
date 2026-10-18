@@ -72,7 +72,6 @@ export default function SalesDashboard() {
   const productSearchRef = useRef(null);
   const productSearchInputRef = useRef(null);
   const productSearchNavigatingRef = useRef(false);
-  const saleCustomerSnapshotRef = useRef(null);
   const saleQtyRef = useRef(null);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
@@ -145,7 +144,6 @@ export default function SalesDashboard() {
   }, [loadingProducts, receipt, returnForm, saleModalProduct, products, selectedProductIndex]);
   useEffect(() => {
     if (!saleModalProduct) return;
-    if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer by name or phone before adding this product.' });
     window.requestAnimationFrame(() => saleQtyRef.current?.select());
   }, [saleModalProduct]);
   useEffect(() => {
@@ -167,27 +165,15 @@ export default function SalesDashboard() {
 
   function openSaleModal(product) {
     if (!product || Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) <= 0) return;
-    saleCustomerSnapshotRef.current = cart.length
-      ? { customerMode, selectedCustomer, customerSearch, paymentStatus, paidAmount }
-      : { customerMode: 'walk-in', selectedCustomer: null, customerSearch: '', paymentStatus: 'paid', paidAmount: '' };
     setSaleModalProduct(product);
     setSaleDraft({
       qty: '1',
-      price: String(Number(product.mrp || 0)),
+      price: String(Number(product.sellingPrice ?? product.mrp ?? 0)),
       discount: '0'
     });
   }
 
-  function closeSaleModal(keepCustomer = false) {
-    if (keepCustomer !== true && saleCustomerSnapshotRef.current) {
-      const previous = saleCustomerSnapshotRef.current;
-      setCustomerMode(previous.customerMode);
-      setSelectedCustomer(previous.selectedCustomer);
-      setCustomerSearch(previous.customerSearch);
-      setPaymentStatus(previous.paymentStatus);
-      setPaidAmount(previous.paidAmount);
-    }
-    saleCustomerSnapshotRef.current = null;
+  function closeSaleModal() {
     setSaleModalProduct(null);
     setSaleDraft({ qty: '1', price: '', discount: '0' });
   }
@@ -201,7 +187,7 @@ export default function SalesDashboard() {
 
   function addSale(p, values = {}) {
     const qty = Math.max(1, Number(values.qty ?? 1) || 1);
-    const price = Number(values.price ?? p.mrp ?? 0) || 0;
+    const price = Number(values.price ?? p.sellingPrice ?? p.mrp ?? 0) || 0;
     const discount = Number(values.discount ?? 0) || 0;
     const existingIndex = cart.findIndex(i => i.productId === p._id);
     const existingItem = existingIndex >= 0 ? cart[existingIndex] : null;
@@ -238,7 +224,6 @@ export default function SalesDashboard() {
   function submitSaleModal(e) {
     e.preventDefault();
     if (!saleModalProduct) return;
-    if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer by name or phone.' });
     const qty = Number(saleDraft.qty || 0);
     const availableQty = Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0);
     if (qty <= 0) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Enter a quantity greater than zero.' });
@@ -246,7 +231,7 @@ export default function SalesDashboard() {
     if (saleDraft.price === '' || !Number.isFinite(Number(saleDraft.price)) || Number(saleDraft.price) < 0) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Enter a valid selling price of zero or greater.' });
     addSale(saleModalProduct, saleDraft);
     setQ('');
-    closeSaleModal(true);
+    closeSaleModal();
     scrollToProductSearch();
   }
 
@@ -687,6 +672,12 @@ export default function SalesDashboard() {
             <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>
           </div>}
         </div>
+        <div className="mb-4 border-b pb-4">
+          <SaleCustomerPicker mode={customerMode} onModeChange={mode => {
+              setCustomerMode(mode); setCustomerSearch('');
+              if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
+            }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
+        </div>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
           {cart.map((i,idx)=>{
             const shortageQty = Math.max(0, Number(i.qty || 0) - Number(i.stock || 0));
@@ -770,10 +761,6 @@ export default function SalesDashboard() {
             <div className="flex justify-between text-lg"><span>Total</span><b>Rs {billTotal.toLocaleString()}</b></div>
           </div>
           <div className="border-t pt-4 space-y-3">
-            <SaleCustomerPicker mode={customerMode} onModeChange={mode => {
-              setCustomerMode(mode); setCustomerSearch('');
-              if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
-            }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
             <div>
               <label className="text-xs font-semibold text-slate-600">Payment</label>
               <div className="mt-2 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
@@ -879,10 +866,6 @@ export default function SalesDashboard() {
 
     {saleModalProduct && <Modal title="Sell Product" onClose={closeSaleModal}>
       <form onSubmit={submitSaleModal} className="grid gap-5">
-        <SaleCustomerPicker mode={customerMode} onModeChange={mode => {
-              setCustomerMode(mode); setCustomerSearch('');
-              if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
-            }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
         <div className="rounded-2xl border bg-slate-50 p-4">
           <p className="break-words text-lg font-bold text-slate-900">{saleModalProduct.partName}</p>
           <p className="mt-1 text-sm text-slate-500">

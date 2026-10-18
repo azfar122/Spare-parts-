@@ -5,8 +5,8 @@ export function serializeProduct(product) {
   const brand = item?.brand || item?.Brand || '';
   const legacyPrice = item?.bookingPrice ?? item?.['Customer price (cc)'] ?? item?.CCP ?? item?.CP ?? 0;
   const retailPrice = item?.mrp ?? item?.['Retail Price(RP)'] ?? item?.RP ?? 0;
-  const mrp = Number(retailPrice || 0) > 0 ? retailPrice : legacyPrice;
-  const bookingPrice = Number(legacyPrice || 0) > 0 ? legacyPrice : mrp;
+  const mrp = item?.mrp ?? (Number(retailPrice || 0) > 0 ? retailPrice : legacyPrice);
+  const bookingPrice = item?.bookingPrice ?? (Number(legacyPrice || 0) > 0 ? legacyPrice : mrp);
   const quantity = item?.quantity ?? item?.['Stock Qty'] ?? 0;
   const minimumQuantity = item?.minimumQuantity ?? item?.minimumQty ?? item?.minQuantity ?? item?.['Minimum Quantity'] ?? 0;
 
@@ -17,6 +17,7 @@ export function serializeProduct(product) {
     partCode: partNo,
     brand,
     wholesalePrice: item?.wholesalePrice ?? 0,
+    sellingPrice: item?.sellingPrice ?? mrp,
     bookingPrice,
     mrp,
     quantity,
@@ -36,7 +37,7 @@ export function productStock(product) {
 }
 
 export function productPrice(product) {
-  return Number(serializeProduct(product).mrp || 0);
+  return Number(serializeProduct(product).sellingPrice ?? 0);
 }
 
 export function productSearchConditions(q) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
@@ -234,6 +235,10 @@ export default function AdminDashboard() {
 
   return <Layout title="Admin Inventory" subtitle="Manage products, prices, quantity and product details." wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
+    <Link to="/admin/inventory-list" className="mb-5 block rounded-2xl border bg-white p-5 shadow-sm hover:border-brand-red">
+      <p className="font-bold text-brand-red">Inventory List</p>
+      <p className="mt-1 text-sm text-slate-500">View the whole inventory and edit every product column, including prices and stock. No pagination.</p>
+    </Link>
     <div className="mb-5 flex gap-3 overflow-x-auto border-b">
       <button onClick={() => setTab('inventory')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'inventory' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Inventory</button>
       <button onClick={() => setTab('returns')} className={`px-4 py-2 font-medium border-b-2 transition ${tab === 'returns' ? 'border-brand-red text-brand-red' : 'border-transparent text-slate-600'}`}>Returns</button>

@@ -9,6 +9,7 @@ import AdminSettings from './pages/AdminSettings.jsx';
 import PurchaseItems from './pages/PurchaseItems.jsx';
 import Login from './pages/Login.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+import InventoryList from './pages/InventoryList.jsx';
 import SalesDashboard from './pages/SalesDashboard.jsx';
 import SalesBills from './pages/SalesBills.jsx';
 import SalesAnalytics from './pages/SalesAnalytics.jsx';
@@ -35,6 +36,7 @@ function App() {
     <Route path="/admin/purchases" element={<Protected role="admin"><PurchaseItems /></Protected>} />
     <Route path="/sales/purchases" element={<Protected role="sales"><PurchaseItems /></Protected>} />
     <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
+    <Route path="/admin/inventory-list" element={<Protected role="admin"><InventoryList /></Protected>} />
     <Route path="/admin/sales" element={<Protected role="admin"><SalesAnalytics /></Protected>} />
     <Route path="/admin/customers" element={<Protected role="admin"><CustomerLedger /></Protected>} />
     <Route path="/admin/warehouses" element={<Protected role="admin"><WarehouseStock /></Protected>} />

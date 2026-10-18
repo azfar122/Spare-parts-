@@ -19,6 +19,7 @@ function normalizeProductPayload(body) {
     partCode: String(body.partCode || body.partNo || body.PartNo || body['Part No'] || body['Part No.'] || '').trim(),
     brand: String(body.brand || '').trim(),
     wholesalePrice: Number(body.wholesalePrice ?? 0),
+    ...(body.sellingPrice != null ? { sellingPrice: Number(body.sellingPrice) } : {}),
     bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
@@ -27,6 +28,7 @@ function normalizeProductPayload(body) {
   };
 
   if (!Number.isFinite(payload.wholesalePrice) || payload.wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
+  if (payload.sellingPrice != null && (!Number.isFinite(payload.sellingPrice) || payload.sellingPrice < 0)) throw new Error('Selling price must be a valid amount');
   if (!payload.partName) throw new Error('Part name is required');
   if (!payload.partCode) throw new Error('Part code is required');
   if (!Number.isFinite(payload.mrp) || payload.mrp < 0) throw new Error('MRP must be a valid amount');
@@ -39,18 +41,21 @@ function normalizeProductPayload(body) {
 }
 
 function normalizeProductUpdate(body, existing = {}) {
-  const partName = String(body.partName || body.productName || body['Product Name'] || existing.partName || existing['Product Name'] || '').trim();
-  const partCode = String(body.partCode || body.partNo || body.PartNo || body['Part No'] || existing.partCode || existing.partNo || existing.PartNo || existing['Part No'] || '').trim();
-  const brand = String(body.brand || body.Brand || existing.brand || existing.Brand || '').trim();
+  const partName = String(body.partName ?? body.productName ?? body['Product Name'] ?? existing.partName ?? existing['Product Name'] ?? '').trim();
+  const partCode = String(body.partCode ?? body.partNo ?? body.PartNo ?? body['Part No'] ?? existing.partCode ?? existing.partNo ?? existing.PartNo ?? existing['Part No'] ?? '').trim();
+  const brand = String(body.brand ?? body.Brand ?? existing.brand ?? existing.Brand ?? '').trim();
   const mrp = Number(body.mrp ?? body.RP ?? existing.mrp ?? existing.RP ?? 0);
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
   const wholesalePrice = Number(body.wholesalePrice ?? existing.wholesalePrice ?? 0);
+  const sellingPrice = body.sellingPrice ?? existing.sellingPrice;
+  if (sellingPrice != null && (!Number.isFinite(Number(sellingPrice)) || Number(sellingPrice) < 0)) throw new Error('Selling price must be a valid amount');
   const quantity = Number(body.quantity ?? body['Stock Qty'] ?? existing.quantity ?? existing['Stock Qty'] ?? 0);
-  const minOrderQty = Number(body.minOrderQty || existing.minOrderQty || 1);
+  const minOrderQty = Number(body.minOrderQty ?? existing.minOrderQty ?? 1);
   const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? existing.minimumQuantity ?? existing.minimumQty ?? existing.minQuantity ?? existing['Minimum Quantity'] ?? 0);
 
   if (!Number.isFinite(wholesalePrice) || wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
   if (!partName) throw new Error('Product name is required');
+  if (!partCode) throw new Error('Part code is required');
   if (!Number.isFinite(mrp) || mrp < 0) throw new Error('Retail price must be a valid amount');
   if (!Number.isFinite(bookingPrice) || bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(quantity) || quantity < 0) throw new Error('Quantity must be a whole number');
@@ -59,9 +64,11 @@ function normalizeProductUpdate(body, existing = {}) {
 
   const update = {
     partName,
+    productName: partName,
     brand,
     bookingPrice,
     wholesalePrice,
+    ...(sellingPrice != null ? { sellingPrice: Number(sellingPrice) } : {}),
     mrp,
     minOrderQty,
     minimumQuantity,
@@ -77,6 +84,7 @@ function normalizeProductUpdate(body, existing = {}) {
 
   if (partCode) {
     update.partCode = partCode;
+    update.partNo = partCode;
     update.PartNo = partCode;
     update['Part No'] = partCode;
   }
@@ -165,6 +173,8 @@ async function lowStockProducts() {
 }
 
 router.get('/', async (req, res) => {
+  if (req.query.all === 'true' && req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  const unpaginated = req.query.all === 'true';
   const { q = '', page = 1, limit = 25, lowStock, inStock, includeWarehouseStock } = req.query;
   const filter = { active: { $ne: false } };
   const conditions = [];
@@ -183,9 +193,9 @@ router.get('/', async (req, res) => {
     });
   }
   if (conditions.length) filter.$and = conditions;
-  const skip = (Number(page) - 1) * Number(limit);
+  const skip = unpaginated ? 0 : (Number(page) - 1) * Number(limit);
   let [items, total] = await Promise.all([
-    Product.find(filter).sort({ Sr: 1, partName: 1, 'Product Name': 1 }).skip(skip).limit(Number(limit)).lean(),
+    Product.find(filter).sort({ Sr: 1, partName: 1, 'Product Name': 1 }).skip(skip).limit(unpaginated ? 0 : Number(limit)).lean(),
     Product.countDocuments(filter)
   ]);
 
@@ -220,7 +230,7 @@ router.get('/', async (req, res) => {
     items = items.map(serializeProduct);
   }
 
-  res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  res.json({ items, total, page: unpaginated ? 1 : Number(page), pages: unpaginated ? 1 : Math.ceil(total / Number(limit)) });
 });
 
 router.get('/low-stock', async (req, res) => {

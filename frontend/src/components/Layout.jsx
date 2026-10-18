@@ -47,6 +47,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
 
   const adminLinks = [
     { to: '/admin', label: 'Inventory', icon: Store },
+    { to: '/admin/inventory-list', label: 'Inventory List', icon: Package },
     { to: '/admin/settings', label: 'Settings', icon: ShieldCheck },
     { to: '/admin/sales', label: 'Sales', icon: BarChart3 },
     { to: '/admin/customers', label: 'Khata', icon: BookOpen },
