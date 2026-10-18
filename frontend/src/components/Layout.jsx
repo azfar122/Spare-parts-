@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import logo from '../assets/atlas-honda-logo.png';
+import BackToTop from './BackToTop.jsx';
 
 export default function Layout({ title, subtitle, children, wide = false, headerAction = null }) {
   const { user, logout } = useAuth();
@@ -57,6 +58,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
   ];
   const salesLinks = [
     { to: '/sales', label: 'Counter', icon: Store },
+    { to: '/sales/inventory-list', label: 'Inventory List', icon: Package },
     { to: '/sales/bills', label: 'Sales', icon: BarChart3 },
     { to: '/sales/purchases', label: 'Purchase Items', icon: PackagePlus },
     { to: '/sales/purchase-orders', label: 'Orders', icon: Package }
@@ -192,5 +194,6 @@ export default function Layout({ title, subtitle, children, wide = false, header
       </div>
       {children}
     </main>
+    <BackToTop />
   </div>;
 }

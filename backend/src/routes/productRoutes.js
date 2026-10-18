@@ -41,6 +41,8 @@ function normalizeProductPayload(body) {
 }
 
 function normalizeProductUpdate(body, existing = {}) {
+  const stored = existing;
+  existing = { ...existing, ...serializeProduct(existing) };
   const partName = String(body.partName ?? body.productName ?? body['Product Name'] ?? existing.partName ?? existing['Product Name'] ?? '').trim();
   const partCode = String(body.partCode ?? body.partNo ?? body.PartNo ?? body['Part No'] ?? existing.partCode ?? existing.partNo ?? existing.PartNo ?? existing['Part No'] ?? '').trim();
   const brand = String(body.brand ?? body.Brand ?? existing.brand ?? existing.Brand ?? '').trim();
@@ -54,8 +56,8 @@ function normalizeProductUpdate(body, existing = {}) {
   const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? existing.minimumQuantity ?? existing.minimumQty ?? existing.minQuantity ?? existing['Minimum Quantity'] ?? 0);
 
   if (!Number.isFinite(wholesalePrice) || wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
-  if (!partName) throw new Error('Product name is required');
-  if (!partCode) throw new Error('Part code is required');
+  if (!partName && ['partName', 'productName', 'Product Name', 'Product name'].some(key => Object.hasOwn(body, key))) throw new Error('Product name is required');
+  if (!partCode && ['partCode', 'partNo', 'PartNo', 'Part No', 'Part No.'].some(key => Object.hasOwn(body, key))) throw new Error('Part code is required');
   if (!Number.isFinite(mrp) || mrp < 0) throw new Error('Retail price must be a valid amount');
   if (!Number.isFinite(bookingPrice) || bookingPrice < 0) throw new Error('Booking price must be a valid amount');
   if (!Number.isInteger(quantity) || quantity < 0) throw new Error('Quantity must be a whole number');
@@ -81,7 +83,7 @@ function normalizeProductUpdate(body, existing = {}) {
     if (![key, ...legacyKeys].some(field => Object.hasOwn(body, field))) continue;
     update[key] = values[key];
     for (const alias of legacyKeys) {
-      if (Object.hasOwn(existing, alias)) update[alias] = values[key];
+      if (Object.hasOwn(stored, alias)) update[alias] = values[key];
     }
   }
 
@@ -169,7 +171,7 @@ async function lowStockProducts() {
 }
 
 router.get('/', async (req, res) => {
-  if (req.query.all === 'true' && req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.query.all === 'true' && !['admin', 'sales'].includes(req.user.role)) return res.status(403).json({ message: 'Inventory access required' });
   const unpaginated = req.query.all === 'true';
   const { q = '', page = 1, limit = 25, lowStock, inStock, includeWarehouseStock } = req.query;
   const filter = { active: { $ne: false } };

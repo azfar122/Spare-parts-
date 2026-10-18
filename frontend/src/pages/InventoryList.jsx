@@ -3,6 +3,7 @@ import Layout from '../components/Layout.jsx';
 import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const columns = [
   { key: 'partName', label: 'Product Name', required: true },
@@ -24,6 +25,8 @@ function editableValues(product) {
 }
 
 export default function InventoryList() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'admin';
   const [products, setProducts] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [query, setQuery] = useState('');
@@ -76,10 +79,13 @@ export default function InventoryList() {
 
   async function save(event) {
     event.preventDefault();
+    if (!canEdit || saving) return;
     const changes = Object.entries(drafts);
     // Validate hidden search results as well as the visible inputs.
-    for (const [, values] of changes) {
+    for (const [id, values] of changes) {
+      const baseline = editableValues(products.find(product => product._id === id));
       for (const column of columns) {
+        if (values[column.key] === baseline[column.key]) continue;
         const value = values[column.key];
         const number = Number(value);
         if ((column.required && !value.trim()) || (column.type === 'number' &&
@@ -116,17 +122,17 @@ export default function InventoryList() {
     }
   }
 
-  return <Layout title="Inventory List" subtitle="Edit product details, prices and shop stock directly in the full inventory list." wide>
+  return <Layout title="Inventory List" subtitle={canEdit ? 'Edit product details, prices and shop stock directly in the full inventory list.' : 'View all product details, prices and shop stock in one list.'} wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     {loading ? <LoadingState label="Loading full inventory..." /> : loadFailed ?
       <button onClick={load} className="rounded-xl border px-5 py-3">Retry loading inventory</button> :
-      <form onSubmit={save}>
+      <form onSubmit={save} noValidate>
         <div className="sticky top-0 z-20 mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm">
           <input type="search" aria-label="Search inventory" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search product name, part no or brand" className="min-w-0 flex-1 rounded-xl border p-3" />
-          <span className="text-sm text-slate-500">{visibleProducts.length} of {products.length} products · {dirtyCount} unsaved</span>
-          <button type="submit" disabled={saving || !dirtyCount} className="flex items-center gap-2 rounded-xl bg-brand-red px-5 py-3 font-semibold text-white disabled:opacity-50">
+          <span className="text-sm text-slate-500">{visibleProducts.length} of {products.length} products{canEdit && ` · ${dirtyCount} unsaved`}</span>
+          {canEdit && <button type="submit" disabled={saving || !dirtyCount} className="flex items-center gap-2 rounded-xl bg-brand-red px-5 py-3 font-semibold text-white disabled:opacity-50">
             {saving && <ButtonSpinner />}{saving ? 'Saving...' : 'Save Changes'}
-          </button>
+          </button>}
         </div>
         <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
           <table className="w-full text-sm">
@@ -135,11 +141,12 @@ export default function InventoryList() {
               const values = drafts[product._id] || editableValues(product);
               return <tr key={product._id} className={`border-t ${drafts[product._id] ? 'bg-amber-50' : ''}`}>
                 {columns.map(column => <td key={column.key} className="p-2">
-                  <input aria-label={`${column.label} for ${product.partCode || product.partName}`} type={column.type || 'text'}
+                  {canEdit ? <input aria-label={`${column.label} for ${product.partCode || product.partName}`} type={column.type || 'text'}
                     value={values[column.key]} onChange={event => edit(product, column.key, event.target.value)}
                     disabled={saving} required={column.required || column.type === 'number'}
                     min={column.type === 'number' ? column.min ?? 0 : undefined} step={column.type === 'number' ? column.step || '1' : undefined}
-                    className={`w-full rounded-lg border border-slate-200 bg-white p-2 focus:border-brand-red focus:outline-none disabled:opacity-60 ${column.key === 'partName' ? 'min-w-[240px]' : 'min-w-[140px]'}`} />
+                    className={`w-full rounded-lg border border-slate-200 bg-white p-2 focus:border-brand-red focus:outline-none disabled:opacity-60 ${column.key === 'partName' ? 'min-w-[240px]' : 'min-w-[140px]'}`} /> :
+                    <span className="block min-w-[120px] whitespace-nowrap p-2">{values[column.key] || '—'}</span>}
                 </td>)}
               </tr>;
             })}</tbody>
