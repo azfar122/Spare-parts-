@@ -284,7 +284,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
   }
 });
 
-router.put('/:id', requireRole('admin'), async (req, res) => {
+router.put('/:id', requireRole('admin', 'sales'), async (req, res) => {
   try {
     const existing = await Product.findById(req.params.id).lean();
     if (!existing) return res.status(404).json({ message: 'Product not found' });

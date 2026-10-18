@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import Product from '../src/models/Product.js';
+import { requireRole } from '../src/middleware/auth.js';
 import { serializeProduct, productSearchConditions, productPrice } from '../src/utils/productLegacy.js';
 const removed = ['category', 'Category', 'type', 'Type', 'model', 'Model', 'description', 'Description'];
 test('legacy products omit removed fields without changing prices or stock', () => {
@@ -79,14 +80,15 @@ test('saving an inventory edit updates the same record without inserting a row',
   const source = fs.readFileSync(new URL('../src/routes/productRoutes.js', import.meta.url), 'utf8');
   const rows = [{ _id: 'existing-product', 'Product name': 'Brake', 'Part No.': 'P1', RP: 180, quantity: 10 }];
   let handler;
+  let authorize;
   let writes = 0;
   const router = {
     use() {}, get() {}, post() {}, delete() {},
-    put(path, middleware, callback) { handler = callback; }
+    put(path, middleware, callback) { authorize = middleware; handler = callback; }
   };
   const context = vm.createContext({
     express: { Router: () => router },
-    requireAuth() {}, requireRole: () => () => {},
+    requireAuth() {}, requireRole,
     serializeProduct, captureDailyOpening: async () => {},
     Product: {
       findById(id) { return { lean: async () => rows.find(row => row._id === id) }; },
@@ -105,12 +107,21 @@ test('saving an inventory edit updates the same record without inserting a row',
   vm.runInContext(source.replace(/^import .*;\n/gm, '').replace('export default router;', ''), context);
   let response;
   const res = { json(value) { response = value; }, status(code) { assert.fail(`Unexpected HTTP ${code}`); } };
-  for (const mrp of [200, 220]) {
-    await handler({ params: { id: 'existing-product' }, body: { mrp }, app: { get: () => ({ emit() {} }) } }, res);
+  for (const [role, mrp] of [['admin', 200], ['sales', 220]]) {
+    const req = { user: { role }, params: { id: 'existing-product' }, body: { mrp }, app: { get: () => ({ emit() {} }) } };
+    let allowed = false;
+    authorize(req, res, () => { allowed = true; });
+    assert.equal(allowed, true, `${role} can save inventory edits`);
+    await handler(req, res);
     assert.equal(rows.length, 1);
     assert.equal(response._id, 'existing-product');
     assert.equal(response.partName, 'Brake');
     assert.equal(response.mrp, mrp);
   }
   assert.equal(writes, 2);
+  let deniedStatus;
+  authorize({ user: { role: 'guest' } }, {
+    status(code) { deniedStatus = code; return this; }, json() {}
+  }, () => assert.fail('Guest must not edit inventory'));
+  assert.equal(deniedStatus, 403);
 });

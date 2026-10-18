@@ -25,7 +25,7 @@ function editableValues(product) {
 
 export default function InventoryList() {
   const { user } = useAuth();
-  const canEdit = user?.role === 'admin';
+  const canEdit = ['admin', 'sales'].includes(user?.role);
   const [products, setProducts] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [query, setQuery] = useState('');

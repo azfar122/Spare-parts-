@@ -624,7 +624,7 @@ export default function SalesDashboard() {
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <Link to="/sales/inventory-list" className="mb-5 block rounded-2xl border bg-white p-5 shadow-sm hover:border-brand-red">
       <p className="font-bold text-brand-red">Inventory List</p>
-      <p className="mt-1 text-sm text-slate-500">View the full inventory, prices and stock without pagination.</p>
+      <p className="mt-1 text-sm text-slate-500">View and edit the full inventory, prices and stock without pagination.</p>
     </Link>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
