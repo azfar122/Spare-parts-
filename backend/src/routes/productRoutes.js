@@ -62,31 +62,27 @@ function normalizeProductUpdate(body, existing = {}) {
   if (!Number.isInteger(minOrderQty) || minOrderQty < 1) throw new Error('Minimum order quantity must be at least 1');
   if (!Number.isInteger(minimumQuantity) || minimumQuantity < 0) throw new Error('Minimum quantity must be zero or greater');
 
-  const update = {
-    partName,
-    productName: partName,
-    brand,
-    bookingPrice,
-    wholesalePrice,
-    ...(sellingPrice != null ? { sellingPrice: Number(sellingPrice) } : {}),
-    mrp,
-    minOrderQty,
-    minimumQuantity,
-    quantity,
-    'Product Name': partName,
-    Brand: brand,
-    CCP: bookingPrice,
-    CP: bookingPrice,
-    RP: mrp,
-    'Stock Qty': quantity,
-    'Minimum Quantity': minimumQuantity
+  const values = { partName, partCode, brand, bookingPrice, wholesalePrice,
+    sellingPrice: sellingPrice == null ? undefined : Number(sellingPrice),
+    mrp, minOrderQty, minimumQuantity, quantity };
+  const aliases = {
+    partName: ['productName', 'Product Name', 'Product name'],
+    partCode: ['partNo', 'PartNo', 'Part No', 'Part No.'],
+    brand: ['Brand'],
+    bookingPrice: ['CCP', 'CP', 'Booking Price', 'Customer price (cc)'],
+    wholesalePrice: [], sellingPrice: [],
+    mrp: ['RP', 'Retail Price(RP)'],
+    minOrderQty: [],
+    minimumQuantity: ['minimumQty', 'minQuantity', 'Minimum Quantity'],
+    quantity: ['Stock Qty']
   };
-
-  if (partCode) {
-    update.partCode = partCode;
-    update.partNo = partCode;
-    update.PartNo = partCode;
-    update['Part No'] = partCode;
+  const update = {};
+  for (const [key, legacyKeys] of Object.entries(aliases)) {
+    if (![key, ...legacyKeys].some(field => Object.hasOwn(body, field))) continue;
+    update[key] = values[key];
+    for (const alias of legacyKeys) {
+      if (Object.hasOwn(existing, alias)) update[alias] = values[key];
+    }
   }
 
   return update;
@@ -297,7 +293,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Product not found' });
     await captureDailyOpening(existing);
     const update = normalizeProductUpdate(req.body, existing);
-    const duplicateProduct = await Product.findOne(duplicateProductQuery(update, existing._id)).lean();
+    const duplicateProduct = await Product.findOne(duplicateProductQuery({ ...serializeProduct(existing), ...update }, existing._id)).lean();
     if (duplicateProduct) {
       const err = new Error(duplicateProductMessage(duplicateProduct));
       err.statusCode = 409;

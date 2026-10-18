@@ -50,3 +50,14 @@ test('inventory edits can clear brand, rename legacy products and preserve zero 
   assert.throws(() => context.normalizeProductUpdate({ partCode: '' }, existing), /code is required/);
   assert.throws(() => context.normalizeProductUpdate({ minOrderQty: 0 }, existing), /at least 1/);
 });
+test('editing one field does not create unrelated fields or new legacy aliases', () => {
+  const source = fs.readFileSync(new URL('../src/routes/productRoutes.js', import.meta.url), 'utf8');
+  const context = vm.createContext({});
+  vm.runInContext(source.slice(source.indexOf('function normalizeProductPayload'), source.indexOf('function duplicateProductMessage')), context);
+  const existing = { partName: 'Brake', partCode: 'P1', bookingPrice: 100, mrp: 180, quantity: 10 };
+  const update = context.normalizeProductUpdate({ bookingPrice: 120 }, existing);
+  assert.deepEqual(JSON.parse(JSON.stringify(update)), { bookingPrice: 120 });
+  const legacyUpdate = context.normalizeProductUpdate({ bookingPrice: 120 }, { ...existing, CCP: 100 });
+  assert.deepEqual(JSON.parse(JSON.stringify(legacyUpdate)), { bookingPrice: 120, CCP: 120 });
+  assert.equal(Object.hasOwn(legacyUpdate, 'CP'), false);
+});
