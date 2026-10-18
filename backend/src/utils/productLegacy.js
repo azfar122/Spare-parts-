@@ -10,14 +10,13 @@ export function serializeProduct(product) {
   const quantity = item?.quantity ?? item?.['Stock Qty'] ?? 0;
   const minimumQuantity = item?.minimumQuantity ?? item?.minimumQty ?? item?.minQuantity ?? item?.['Minimum Quantity'] ?? 0;
 
-  const { category, Category, type, Type, model, Model, description, Description, ...details } = item || {};
+  const { category, Category, type, Type, model, Model, description, Description, sellingPrice, ...details } = item || {};
   return {
     ...details,
     partName: productName,
     partCode: partNo,
     brand,
     wholesalePrice: item?.wholesalePrice ?? 0,
-    sellingPrice: item?.sellingPrice ?? mrp,
     bookingPrice,
     mrp,
     quantity,
@@ -37,7 +36,7 @@ export function productStock(product) {
 }
 
 export function productPrice(product) {
-  return Number(serializeProduct(product).sellingPrice ?? 0);
+  return Number(serializeProduct(product).mrp ?? 0);
 }
 
 export function productSearchConditions(q) {

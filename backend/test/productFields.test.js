@@ -24,14 +24,16 @@ test('product writes and duplicate checks ignore removed attributes', () => {
 test('product schema no longer stores removed product fields', () => {
   for (const key of removed) assert.equal(Product.schema.path(key), undefined);
 });
-test('selling rate is separate from retail and falls back for older products', () => {
+test('default selling rate uses retail price and ignores the removed selling field', () => {
   assert.equal(productPrice({ mrp: 180 }), 180);
   const product = serializeProduct({ mrp: 180, sellingPrice: 150, bookingPrice: 100, wholesalePrice: 130 });
-  assert.equal(productPrice(product), 150);
+  assert.equal(productPrice(product), 180);
+  assert.equal(Object.hasOwn(product, 'sellingPrice'), false);
   assert.equal(product.mrp, 180);
   assert.equal(product.bookingPrice, 100);
   assert.equal(product.wholesalePrice, 130);
-  assert.equal(productPrice({ mrp: 180, sellingPrice: 0 }), 0);
+  assert.equal(productPrice({ mrp: 180, sellingPrice: 0 }), 180);
+  assert.equal(productPrice({ mrp: 0, sellingPrice: 150 }), 0);
 });
 test('inventory edits can clear brand, rename legacy products and preserve zero prices', () => {
   const source = fs.readFileSync(new URL('../src/routes/productRoutes.js', import.meta.url), 'utf8');

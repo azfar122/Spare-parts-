@@ -169,7 +169,7 @@ export default function SalesDashboard() {
     setSaleModalProduct(product);
     setSaleDraft({
       qty: '1',
-      price: String(Number(product.sellingPrice ?? product.mrp ?? 0)),
+      price: String(Number(product.mrp ?? 0)),
       discount: '0'
     });
   }
@@ -188,7 +188,7 @@ export default function SalesDashboard() {
 
   function addSale(p, values = {}) {
     const qty = Math.max(1, Number(values.qty ?? 1) || 1);
-    const price = Number(values.price ?? p.sellingPrice ?? p.mrp ?? 0) || 0;
+    const price = Number(values.price ?? p.mrp ?? 0) || 0;
     const discount = Number(values.discount ?? 0) || 0;
     const existingIndex = cart.findIndex(i => i.productId === p._id);
     const existingItem = existingIndex >= 0 ? cart[existingIndex] : null;

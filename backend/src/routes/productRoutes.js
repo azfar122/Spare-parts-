@@ -19,7 +19,6 @@ function normalizeProductPayload(body) {
     partCode: String(body.partCode || body.partNo || body.PartNo || body['Part No'] || body['Part No.'] || '').trim(),
     brand: String(body.brand || '').trim(),
     wholesalePrice: Number(body.wholesalePrice ?? 0),
-    ...(body.sellingPrice != null ? { sellingPrice: Number(body.sellingPrice) } : {}),
     bookingPrice,
     mrp,
     minOrderQty: Number(body.minOrderQty || 1),
@@ -28,7 +27,6 @@ function normalizeProductPayload(body) {
   };
 
   if (!Number.isFinite(payload.wholesalePrice) || payload.wholesalePrice < 0) throw new Error('Wholesale price must be a valid amount');
-  if (payload.sellingPrice != null && (!Number.isFinite(payload.sellingPrice) || payload.sellingPrice < 0)) throw new Error('Selling price must be a valid amount');
   if (!payload.partName) throw new Error('Part name is required');
   if (!payload.partCode) throw new Error('Part code is required');
   if (!Number.isFinite(payload.mrp) || payload.mrp < 0) throw new Error('MRP must be a valid amount');
@@ -49,8 +47,6 @@ function normalizeProductUpdate(body, existing = {}) {
   const mrp = Number(body.mrp ?? body.RP ?? existing.mrp ?? existing.RP ?? 0);
   const bookingPrice = Number(body.bookingPrice ?? body.CCP ?? body.CP ?? body['Booking Price'] ?? existing.bookingPrice ?? existing.CCP ?? existing.CP ?? mrp);
   const wholesalePrice = Number(body.wholesalePrice ?? existing.wholesalePrice ?? 0);
-  const sellingPrice = body.sellingPrice ?? existing.sellingPrice;
-  if (sellingPrice != null && (!Number.isFinite(Number(sellingPrice)) || Number(sellingPrice) < 0)) throw new Error('Selling price must be a valid amount');
   const quantity = Number(body.quantity ?? body['Stock Qty'] ?? existing.quantity ?? existing['Stock Qty'] ?? 0);
   const minOrderQty = Number(body.minOrderQty ?? existing.minOrderQty ?? 1);
   const minimumQuantity = Number(body.minimumQuantity ?? body.minimumQty ?? body.minQuantity ?? body['Minimum Quantity'] ?? existing.minimumQuantity ?? existing.minimumQty ?? existing.minQuantity ?? existing['Minimum Quantity'] ?? 0);
@@ -65,14 +61,13 @@ function normalizeProductUpdate(body, existing = {}) {
   if (!Number.isInteger(minimumQuantity) || minimumQuantity < 0) throw new Error('Minimum quantity must be zero or greater');
 
   const values = { partName, partCode, brand, bookingPrice, wholesalePrice,
-    sellingPrice: sellingPrice == null ? undefined : Number(sellingPrice),
     mrp, minOrderQty, minimumQuantity, quantity };
   const aliases = {
     partName: ['productName', 'Product Name', 'Product name'],
     partCode: ['partNo', 'PartNo', 'Part No', 'Part No.'],
     brand: ['Brand'],
     bookingPrice: ['CCP', 'CP', 'Booking Price', 'Customer price (cc)'],
-    wholesalePrice: [], sellingPrice: [],
+    wholesalePrice: [],
     mrp: ['RP', 'Retail Price(RP)'],
     minOrderQty: [],
     minimumQuantity: ['minimumQty', 'minQuantity', 'Minimum Quantity'],

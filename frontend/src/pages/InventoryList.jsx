@@ -11,7 +11,6 @@ const columns = [
   { key: 'brand', label: 'Brand' },
   { key: 'bookingPrice', label: 'Booking Price', type: 'number', step: '0.01' },
   { key: 'wholesalePrice', label: 'Wholesale Price', type: 'number', step: '0.01' },
-  { key: 'sellingPrice', label: 'Selling Price', type: 'number', step: '0.01' },
   { key: 'mrp', label: 'Retail Price (RP)', type: 'number', step: '0.01' },
   { key: 'quantity', label: 'Shop Stock Qty', type: 'number' },
   { key: 'minOrderQty', label: 'Min Order Qty', type: 'number', min: 1 },
