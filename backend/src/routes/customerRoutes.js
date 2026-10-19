@@ -49,13 +49,38 @@ async function addLedgerEntry({ customer, type, sale, description, debit = 0, cr
 router.get('/', requireRole('sales', 'admin'), async (req, res) => {
   const { q = '', page = 1, limit = 20 } = req.query;
   const filter = { active: { $ne: false } };
-  if (q) filter.$or = [{ name: new RegExp(q, 'i') }, { phone: new RegExp(q, 'i') }];
+  if (q) {
+    const pattern = new RegExp(String(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ name: pattern }, { phone: pattern }];
+  }
   const skip = (Number(page) - 1) * Number(limit);
   const [items, total] = await Promise.all([
     Customer.find(filter).sort({ name: 1 }).skip(skip).limit(Number(limit)),
     Customer.countDocuments(filter)
   ]);
   res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+});
+
+router.post('/quick-create', requireRole('sales', 'admin'), async (req, res) => {
+  try {
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const phone = normalizePhone(req.body.phone);
+    if (!name) return res.status(400).json({ message: 'Customer name is required' });
+    const existing = await Customer.findOne(phone ? { phone } : {
+      active: { $ne: false },
+      name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    });
+    if (existing) {
+      if (existing.active === false) return res.status(409).json({ message: 'This phone belongs to an inactive customer. Ask admin to review the customer record.' });
+      return res.json(existing);
+    }
+    const customer = await Customer.create({
+      name, phone, openingBalance: 0, currentBalance: 0, createdBy: req.user._id
+    });
+    res.status(201).json(customer);
+  } catch (err) {
+    res.status(400).json({ message: err.message || 'Customer could not be created' });
+  }
 });
 
 router.post('/', requireRole('admin'), async (req, res) => {
