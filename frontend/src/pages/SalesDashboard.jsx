@@ -74,6 +74,7 @@ export default function SalesDashboard() {
   const productSearchInputRef = useRef(null);
   const productSearchNavigatingRef = useRef(false);
   const saleQtyRef = useRef(null);
+  const checkoutRequestRef = useRef(false);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
 
@@ -469,7 +470,9 @@ export default function SalesDashboard() {
   }
 
   async function checkout() {
+    if (checkoutRequestRef.current) return;
     try {
+      if (!cart.length) return;
       if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer for this bill.' });
       if (customerMode === 'walk-in' && paymentStatus !== 'paid') return setNotice({ type: 'error', title: 'Customer Required', message: 'Unpaid or partial bills must be linked to an existing customer.' });
       const itemMissingWarehouse = cart.find(item => {
@@ -481,6 +484,11 @@ export default function SalesDashboard() {
         return setNotice({ type: 'error', title: 'Warehouse Required', message: `Allocate exactly ${shortageQty} warehouse item(s) for ${itemMissingWarehouse.partCode}.` });
       }
       if (cart.some(item => !Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Selling prices must be valid amounts of zero or greater.' });
+      if (cart.some(item => !Number.isInteger(Number(item.qty)) || Number(item.qty) <= 0)) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Each item quantity must be a whole number greater than zero.' });
+      if (cart.some(item => !Number.isFinite(Number(item.discount || 0)) || Number(item.discount || 0) < 0 || Number(item.discount || 0) > Number(item.price) * Number(item.qty))) return setNotice({ type: 'error', title: 'Invalid Discount', message: 'Each discount must be zero or greater and cannot exceed the item total.' });
+      if (paymentStatus === 'partial' && (!Number.isFinite(Number(paidAmount)) || Number(paidAmount) <= 0 || Number(paidAmount) >= billTotal)) return setNotice({ type: 'error', title: 'Invalid Partial Payment', message: 'The paid amount must be greater than zero and less than the bill total.' });
+      checkoutRequestRef.current = true;
+      setNotice(null);
       setCheckoutLoading(true);
       const r = await api.post('/sales', {
         customerName: selectedCustomer?.name || 'Walk-in Customer',
@@ -497,7 +505,16 @@ export default function SalesDashboard() {
       setPaymentStatus('paid');
       setPaidAmount('');
       await load(page);
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        title: 'Bill Could Not Be Created',
+        message: err.response?.data?.message || (err.response
+          ? `The server could not complete the bill (HTTP ${err.response.status}). Your bill items have been kept.`
+          : 'The server response was interrupted. Check Sales for this bill before trying again to avoid a duplicate. Your bill items have been kept.')
+      });
     } finally {
+      checkoutRequestRef.current = false;
       setCheckoutLoading(false);
     }
   }

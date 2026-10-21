@@ -383,6 +383,7 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Sale creation failed:', err);
     await session.abortTransaction();
     res.status(400).json({ message: err.message });
   } finally {
