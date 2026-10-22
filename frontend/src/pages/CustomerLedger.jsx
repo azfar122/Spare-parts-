@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, Edit, Plus, RefreshCw, Search, Trash2, Wallet } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
@@ -6,6 +6,8 @@ import ConfirmModal from '../components/ConfirmModal.jsx';
 import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import CustomerProductHistory from '../components/CustomerProductHistory.jsx';
 
 const emptyForm = { name: '', phone: '', address: '', notes: '', openingBalance: '' };
 const money = value => `Rs ${Number(value || 0).toLocaleString()}`;
@@ -17,6 +19,11 @@ const entryTypeLabel = entry => {
 };
 
 export default function CustomerLedger() {
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin';
+  const [detailTab, setDetailTab] = useState(canManage ? 'ledger' : 'history');
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const detailRequestRef = useRef(0);
   const [customers, setCustomers] = useState([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,26 +44,37 @@ export default function CustomerLedger() {
       setLoading(true);
       const r = await api.get('/customers', { params: { q, limit: 100 } });
       setCustomers(r.data.items || []);
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Customers Failed', message: err.response?.data?.message || err.message });
     } finally {
       setLoading(false);
     }
   }
 
   async function loadDetail(customer) {
-    const r = await api.get(`/customers/${customer._id}`);
-    setSelected(r.data.customer);
-    setDetail(r.data);
+    const request = ++detailRequestRef.current;
+    setSelected(customer); setDetail(null); setLoadingDetail(true);
+    try {
+      const r = await api.get(`/customers/${customer._id}`);
+      if (request === detailRequestRef.current) { setSelected(r.data.customer); setDetail(r.data); }
+    } catch (err) {
+      if (request === detailRequestRef.current) setNotice({ type: 'error', title: 'Ledger Failed', message: err.response?.data?.message || err.message });
+    } finally {
+      if (request === detailRequestRef.current) setLoadingDetail(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
 
   function openCreate() {
+    if (!canManage) return;
     setEditing(null);
     setForm(emptyForm);
     setFormOpen(true);
   }
 
   function openEdit(customer) {
+    if (!canManage) return;
     setEditing(customer);
     setForm({
       name: customer.name || '',
@@ -70,6 +88,7 @@ export default function CustomerLedger() {
 
   async function saveCustomer(e) {
     e.preventDefault();
+    if (!canManage) return;
     try {
       setSaving(true);
       if (editing) {
@@ -90,6 +109,7 @@ export default function CustomerLedger() {
 
   async function saveEntry(e) {
     e.preventDefault();
+    if (!canManage) return;
     try {
       setSaving(true);
       const path = entryMode === 'payment' ? 'payment' : 'adjustment';
@@ -111,7 +131,7 @@ export default function CustomerLedger() {
   }
 
   async function confirmDeleteCustomer() {
-    if (!deleteCustomerTarget) return;
+    if (!canManage || !deleteCustomerTarget) return;
     const customer = deleteCustomerTarget;
     try {
       setDeletingCustomerId(customer._id);
@@ -130,7 +150,7 @@ export default function CustomerLedger() {
 
   const totalBalance = customers.reduce((sum, c) => sum + Number(c.currentBalance || 0), 0);
 
-  return <Layout title="Khata / Customer Ledger" subtitle="Manage customer balances, payments, bills, and manual adjustments.">
+  return <Layout title="Khata / Customer Ledger" subtitle={canManage ? 'Manage customer balances, payments, bills, and manual adjustments.' : 'View customer balances, ledger entries and product price history. Read only.'} wide>
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
     <div className="grid min-w-0 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="rounded-3xl bg-white border shadow-soft overflow-hidden">
@@ -140,7 +160,7 @@ export default function CustomerLedger() {
               <p className="text-sm text-slate-500">Outstanding</p>
               <p className="text-2xl font-bold text-brand-red">{money(totalBalance)}</p>
             </div>
-            <button onClick={openCreate} className="rounded-xl bg-brand-dark text-white px-4 py-3 inline-flex items-center gap-2"><Plus size={18}/>Add</button>
+            {canManage && <button onClick={openCreate} className="rounded-xl bg-brand-dark text-white px-4 py-3 inline-flex items-center gap-2"><Plus size={18}/>Add</button>}
           </div>
           <form onSubmit={e => { e.preventDefault(); load(); }} className="mt-4 flex gap-2">
             <div className="relative flex-1">
@@ -167,7 +187,7 @@ export default function CustomerLedger() {
       </aside>
 
       <section className="min-w-0 rounded-3xl bg-white border shadow-soft overflow-hidden">
-        {!detail ? <div className="min-h-[520px] grid place-items-center text-center p-8">
+        {loadingDetail ? <LoadingState label="Loading customer ledger..." /> : !detail ? <div className="min-h-[520px] grid place-items-center text-center p-8">
           <div>
             <BookOpen size={42} className="mx-auto text-slate-400" />
             <h3 className="mt-4 text-xl font-bold">Select a customer ledger</h3>
@@ -180,12 +200,12 @@ export default function CustomerLedger() {
               <p className="text-slate-500">{detail.customer.phone || 'No phone'}{detail.customer.address ? ` · ${detail.customer.address}` : ''}</p>
               {detail.customer.notes && <p className="text-sm text-slate-500 mt-2">{detail.customer.notes}</p>}
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            {canManage ? <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
               <button onClick={() => openEdit(detail.customer)} className="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2"><Edit size={16}/>Edit</button>
               <button onClick={() => setEntryMode('payment')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-white"><Wallet size={16}/>Payment</button>
               <button onClick={() => setEntryMode('adjustment')} className="rounded-xl bg-brand-dark px-4 py-2 text-white">Adjustment</button>
               <button onClick={() => requestDeleteCustomer(detail.customer)} disabled={deletingCustomerId === detail.customer._id} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16}/>{deletingCustomerId === detail.customer._id ? 'Deleting...' : 'Delete'}</button>
-            </div>
+            </div> : <span className="rounded-full border bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">Read only</span>}
           </div>
           <div className="grid md:grid-cols-4 gap-4 p-6 border-b">
             <div className="rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Current Balance</p><p className="text-xl font-bold text-brand-red">{money(detail.customer.currentBalance)}</p></div>
@@ -193,7 +213,11 @@ export default function CustomerLedger() {
             <div className="rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Opening</p><p className="text-xl font-bold">{money(detail.customer.openingBalance)}</p></div>
             <div className="rounded-2xl bg-slate-50 p-4"><p className="text-sm text-slate-500">Entries</p><p className="text-xl font-bold">{detail.ledger.length}</p></div>
           </div>
-          <div className="max-h-[520px] max-w-full overflow-auto">
+          <div className="flex gap-2 border-b p-4">
+            <button type="button" onClick={() => setDetailTab('ledger')} className={`rounded-xl border px-4 py-2 text-sm font-semibold ${detailTab === 'ledger' ? 'bg-brand-dark text-white' : ''}`}>Ledger</button>
+            <button type="button" onClick={() => setDetailTab('history')} className={`rounded-xl border px-4 py-2 text-sm font-semibold ${detailTab === 'history' ? 'bg-brand-dark text-white' : ''}`}>Product / Price History</button>
+          </div>
+          {detailTab === 'history' ? <CustomerProductHistory key={detail.customer._id} customerId={detail.customer._id} /> : <div className="max-h-[520px] max-w-full overflow-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead className="sticky top-0 bg-slate-50 text-slate-500">
                 <tr><th className="p-4 text-left">Date</th><th className="p-4 text-left">Type</th><th className="p-4 text-left">Description</th><th className="p-4 text-right">Debit</th><th className="p-4 text-right">Credit</th><th className="p-4 text-right">Balance</th></tr>
@@ -213,12 +237,12 @@ export default function CustomerLedger() {
               </tbody>
             </table>
             {detail.ledger.length === 0 && <div className="p-8 text-center text-slate-500">No ledger entries yet.</div>}
-          </div>
+          </div>}
         </>}
       </section>
     </div>
 
-    {formOpen && <Modal title={editing ? 'Edit Customer' : 'Add Customer'} onClose={() => setFormOpen(false)}>
+    {canManage && formOpen && <Modal title={editing ? 'Edit Customer' : 'Add Customer'} onClose={() => setFormOpen(false)}>
       <form onSubmit={saveCustomer} className="grid gap-4">
         <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Customer name" className="rounded-xl border p-3" />
         <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Phone" className="rounded-xl border p-3" />
@@ -229,7 +253,7 @@ export default function CustomerLedger() {
       </form>
     </Modal>}
 
-    {entryMode && <Modal title={entryMode === 'payment' ? 'Record Payment' : 'Manual Adjustment'} onClose={() => setEntryMode(null)}>
+    {canManage && entryMode && <Modal title={entryMode === 'payment' ? 'Record Payment' : 'Manual Adjustment'} onClose={() => setEntryMode(null)}>
       <form onSubmit={saveEntry} className="grid gap-4">
         {entryMode === 'adjustment' && <select value={entryForm.direction} onChange={e => setEntryForm({ ...entryForm, direction: e.target.value })} className="rounded-xl border p-3">
           <option value="increase">Increase customer balance</option>
@@ -240,7 +264,7 @@ export default function CustomerLedger() {
         <button disabled={saving} className="rounded-xl bg-brand-red text-white py-3 font-bold disabled:opacity-70 inline-flex items-center justify-center gap-2">{saving && <ButtonSpinner />}{saving ? 'Saving...' : 'Save Entry'}</button>
       </form>
     </Modal>}
-    {deleteCustomerTarget && <ConfirmModal
+    {canManage && deleteCustomerTarget && <ConfirmModal
       title="Delete Customer"
       message={`Delete ${deleteCustomerTarget.name} from Khata? Existing bills and ledger history will remain in reports.`}
       confirmLabel="Delete"

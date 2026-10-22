@@ -16,6 +16,7 @@ import returnRoutes from './routes/returnRoutes.js';
 import purchaseOrderRoutes from './routes/purchaseOrderRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import warehouseRoutes from './routes/warehouseRoutes.js';
+import heldBillRoutes from './routes/heldBillRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -105,6 +106,7 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/reports', dailyReportRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/held-bills', heldBillRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);

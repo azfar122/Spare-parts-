@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import Customer from '../models/Customer.js';
 import LedgerEntry from '../models/LedgerEntry.js';
 import Sale from '../models/Sale.js';
+import Product from '../models/Product.js';
+import { serializeProduct } from '../utils/productLegacy.js';
+import { customerPricePipeline, productHistoryPipeline } from '../utils/customerPrices.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -59,6 +62,37 @@ router.get('/', requireRole('sales', 'admin'), async (req, res) => {
     Customer.countDocuments(filter)
   ]);
   res.json({ items, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+});
+
+// Read-only lookup; a POST avoids URL length limits for large bills.
+router.post('/product-prices', requireRole('sales', 'admin'), async (req, res) => {
+  const { customerId, productIds } = req.body;
+  if (!Array.isArray(productIds) || !productIds.length || productIds.length > 500 || productIds.some(id => !mongoose.isValidObjectId(id))) return res.status(400).json({ message: 'Provide up to 500 valid product IDs' });
+  if (customerId && !mongoose.isValidObjectId(customerId)) return res.status(400).json({ message: 'Invalid customer' });
+  if (customerId && !await Customer.exists({ _id: customerId, active: { $ne: false } })) return res.status(404).json({ message: 'Customer not found' });
+  const ids = [...new Set(productIds.map(String))].map(id => new mongoose.Types.ObjectId(id));
+  const [products, prices] = await Promise.all([
+    Product.find({ _id: { $in: ids } }).lean(),
+    customerId ? Sale.aggregate(customerPricePipeline(new mongoose.Types.ObjectId(customerId), ids)) : []
+  ]);
+  const byId = new Map(prices.map(row => [String(row._id), row]));
+  res.json({ items: products.map(product => {
+    const previous = byId.get(String(product._id));
+    const retailPrice = Number(serializeProduct(product).mrp || 0);
+    return { productId: String(product._id), retailPrice, price: previous?.price ?? retailPrice,
+      hasHistory: Boolean(previous), soldAt: previous?.soldAt, receiptNo: previous?.receiptNo };
+  }) });
+});
+
+router.get('/:id/product-history', requireRole('sales', 'admin'), async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid customer' });
+  const customer = await Customer.findOne({ _id: req.params.id, active: { $ne: false } }).select('_id');
+  if (!customer) return res.status(404).json({ message: 'Customer not found' });
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+  const limit = Math.min(100, Math.max(1, Math.floor(Number(req.query.limit) || 50)));
+  const [result] = await Sale.aggregate(productHistoryPipeline(customer._id, String(req.query.q || '').trim(), page, limit));
+  const total = result?.count?.[0]?.total || 0;
+  res.json({ items: result?.items || [], total, page, pages: Math.ceil(total / limit) });
 });
 
 router.post('/quick-create', requireRole('sales', 'admin'), async (req, res) => {
@@ -130,6 +164,7 @@ router.get('/:id', requireRole('sales', 'admin'), async (req, res) => {
   const [ledger, sales] = await Promise.all([
     LedgerEntry.find({ customer: customer._id }).sort({ createdAt: -1 }).limit(200).populate('sale', 'receiptNo grandTotal paidAmount dueAmount paymentStatus'),
     Sale.find({ customer: customer._id }).sort({ createdAt: -1 }).limit(100)
+      .select(req.user.role === 'sales' ? 'receiptNo createdAt grandTotal paidAmount dueAmount paymentStatus items.product items.partName items.partCode items.qty items.price items.discount items.lineTotal' : '')
   ]);
   res.json({ customer, ledger, sales });
 });

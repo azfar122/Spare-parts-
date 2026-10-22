@@ -1,10 +1,14 @@
-import { captureDailyOpening } from '../utils/dailyStock.js';
-import { consumeFifo } from '../utils/stockCost.js';
+import { captureSaleOpenings, ensureStockTracking } from '../utils/dailyStock.js';
+import { planSaleCosts } from '../utils/saleStockCosts.js';
+import StockBatch from '../models/StockBatch.js';
+import { createHash } from 'node:crypto';
 import { buildProfitSummary } from '../utils/profitSummary.js';
 import express from 'express';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
+import HeldBill from '../models/HeldBill.js';
+import { heldSaleId } from '../utils/heldBills.js';
 import Return from '../models/Return.js';
 import WarehouseStock from '../models/WarehouseStock.js';
 import Customer from '../models/Customer.js';
@@ -214,168 +218,214 @@ router.get('/by-receipt/:receiptNo', requireRole('sales', 'admin'), async (req, 
   }
 });
 
+router.post('/checkout-error', requireRole('sales', 'admin'), (req, res) => {
+  const { stage, name, code, message, heldBillId } = req.body;
+  console.error('Checkout client failure:', {
+    userId: String(req.user._id),
+    heldBillId: typeof heldBillId === 'string' ? heldBillId.slice(0, 24) : undefined,
+    stage: String(stage || '').slice(0, 40), name: String(name || '').slice(0, 80),
+    code: String(code || '').slice(0, 80), message: String(message || '').slice(0, 500)
+  });
+  res.status(204).end();
+});
+
 router.post('/', requireRole('sales', 'admin'), async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session;
+  let saleId;
   try {
     const { items, customerName, customerId, paymentStatus = 'paid' } = req.body;
-    if (!items?.length) throw new Error('No items selected');
+    if (!Array.isArray(items) || !items.length) throw new Error('No items selected');
+    const ids = items.map(item => String(item.productId || ''));
+    if (ids.some(id => !mongoose.isValidObjectId(id))) throw new Error('Invalid product');
+    if (new Set(ids).size !== ids.length) throw new Error('Each product must appear only once in the bill');
+    const requestId = req.body.requestId;
+    const heldId = req.body.heldBillId;
+    if (heldId != null && !mongoose.isValidObjectId(heldId)) throw new Error('Invalid held bill');
+    if (requestId != null && (typeof requestId !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(requestId))) throw new Error('Invalid bill request ID');
+    saleId = heldId ? new mongoose.Types.ObjectId(heldSaleId(req.user._id, heldId)) : requestId
+      ? new mongoose.Types.ObjectId(createHash('sha256').update(`${req.user._id}:${requestId}`).digest('hex').slice(0, 24))
+      : new mongoose.Types.ObjectId();
+    const receiptNo = `R-${Date.now()}-${String(saleId).slice(-6)}`;
     if (!['paid', 'unpaid', 'partial'].includes(paymentStatus)) throw new Error('Invalid payment status');
 
-    const saleItems = [];
-    let subtotal = 0;
-    let discountTotal = 0;
-    let customer = null;
+    // Tracking setup is shared metadata; never write it repeatedly inside a sale.
+    const tracking = await ensureStockTracking();
+    session = await mongoose.startSession();
+    const result = await session.withTransaction(async () => {
+      const committed = await Sale.findOne({ _id: saleId, soldBy: req.user._id }).session(session);
+      if (committed) return committed.toObject();
+      if (heldId) {
+        const held = await HeldBill.findOne({ _id: heldId, owner: req.user._id }).session(session);
+        if (!held) throw new Error('Held bill is no longer available. Refresh Held Bills.');
+      }
+      const products = await Product.find({ _id: { $in: ids }, active: { $ne: false } }).session(session).lean();
+      if (products.length !== ids.length) throw new Error('A product is no longer available. Refresh inventory.');
+      const productById = new Map(products.map(product => [String(product._id), product]));
+      const warehouseRows = await WarehouseStock.find({ product: { $in: ids } }).populate('warehouse', 'name').session(session).lean();
+      const warehouseByKey = new Map(warehouseRows.map(row => [`${row.product}:${row.warehouse?._id || row.warehouse}`, row]));
+      await captureSaleOpenings(products, warehouseRows, tracking, session);
+      const batches = await StockBatch.find({ product: { $in: ids }, remaining: { $gt: 0 } }).sort({ purchasedAt: 1, _id: 1 }).session(session).lean();
+      const costs = planSaleCosts(batches);
+      const productWrites = [];
+      const warehouseWrites = [];
+      const saleItems = [];
+      let subtotal = 0;
+      let discountTotal = 0;
+      let customer = null;
 
-    if (customerId) {
-      customer = await Customer.findById(customerId).session(session);
-      if (!customer) throw new Error('Customer not found');
-    }
+      if (customerId) {
+        customer = await Customer.findById(customerId).session(session);
+        if (!customer) throw new Error('Customer not found');
+      }
 
-    for (const item of items) {
-      const product = await Product.findById(item.productId).session(session).lean();
-      if (!product) throw new Error('Product not found');
-      await captureDailyOpening(product, session);
-      const productData = serializeProduct(product);
-      const qty = Number(item.qty);
-      const discount = Number(item.discount || 0);
-      if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity');
-      if (!Number.isFinite(discount) || discount < 0) throw new Error('Invalid discount');
-      const costAllocations = [];
-      await Product.collection.updateOne({ _id: product._id }, { $inc: { stockRevision: 1 } }, { session });
+      for (const item of items) {
+        const product = productById.get(String(item.productId));
+        const productData = serializeProduct(product);
+        const qty = Number(item.qty);
+        const discount = Number(item.discount || 0);
+        if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity');
+        if (!Number.isFinite(discount) || discount < 0) throw new Error('Invalid discount');
+        const costAllocations = [];
 
-      const currentStock = productStock(product);
-      const inventoryQtyUsed = Math.min(currentStock, qty);
-      const warehouseQtyNeeded = qty - inventoryQtyUsed;
-      let warehouseQtyUsed = 0;
-      let warehouseName = '';
-      let warehouse = null;
-      const warehouseAllocations = [];
-      const requestedAllocations = Array.isArray(item.warehouseAllocations) && item.warehouseAllocations.length
-        ? item.warehouseAllocations
-        : item.warehouseId
-          ? [{ warehouseId: item.warehouseId, qty: warehouseQtyNeeded }]
-          : [];
+        const currentStock = productStock(product);
+        const inventoryQtyUsed = Math.min(currentStock, qty);
+        const warehouseQtyNeeded = qty - inventoryQtyUsed;
+        let warehouseQtyUsed = 0;
+        let warehouseName = '';
+        let warehouse = null;
+        const warehouseAllocations = [];
+        const requestedAllocations = Array.isArray(item.warehouseAllocations) && item.warehouseAllocations.length
+          ? item.warehouseAllocations
+          : item.warehouseId
+            ? [{ warehouseId: item.warehouseId, qty: warehouseQtyNeeded }]
+            : [];
 
-      if (warehouseQtyNeeded > 0) {
-        if (!requestedAllocations.length) throw new Error(`Select warehouse stock for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
+        if (warehouseQtyNeeded > 0) {
+          if (!requestedAllocations.length) throw new Error(`Select warehouse stock for ${productLabel(product)}. Main inventory is short by ${warehouseQtyNeeded}`);
 
-        const normalizedAllocations = requestedAllocations
-          .map(allocation => ({
-            warehouseId: allocation.warehouseId || allocation.warehouse,
-            qty: Number(allocation.qty || 0)
-          }))
-          .filter(allocation => allocation.warehouseId && allocation.qty > 0);
-        const allocatedQty = normalizedAllocations.reduce((sum, allocation) => sum + allocation.qty, 0);
-        if (allocatedQty !== warehouseQtyNeeded) {
-          throw new Error(`Allocate exactly ${warehouseQtyNeeded} warehouse item(s) for ${productLabel(product)}`);
-        }
-
-        const duplicateWarehouse = normalizedAllocations.find((allocation, index) =>
-          normalizedAllocations.findIndex(other => String(other.warehouseId) === String(allocation.warehouseId)) !== index
-        );
-        if (duplicateWarehouse) throw new Error(`Select each warehouse only once for ${productLabel(product)}`);
-
-        for (const allocation of normalizedAllocations) {
-          const warehouseStock = await WarehouseStock.findOne({ warehouse: allocation.warehouseId, product: product._id })
-            .populate('warehouse', 'name')
-            .session(session);
-          if (!warehouseStock || Number(warehouseStock.quantity || 0) < allocation.qty) {
-            throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
+          const normalizedAllocations = requestedAllocations
+            .map(allocation => ({
+              warehouseId: allocation.warehouseId || allocation.warehouse,
+              qty: Number(allocation.qty || 0)
+            }))
+            .filter(allocation => allocation.warehouseId && allocation.qty > 0);
+          const allocatedQty = normalizedAllocations.reduce((sum, allocation) => sum + allocation.qty, 0);
+          if (allocatedQty !== warehouseQtyNeeded) {
+            throw new Error(`Allocate exactly ${warehouseQtyNeeded} warehouse item(s) for ${productLabel(product)}`);
           }
 
-          if (!Number.isInteger(allocation.qty)) throw new Error('Warehouse quantity must be a whole number');
-          costAllocations.push(...await consumeFifo(product, allocation.warehouseId, Number(warehouseStock.quantity), allocation.qty, session));
-          warehouseStock.quantity -= allocation.qty;
-          await warehouseStock.save({ session });
-          warehouseQtyUsed += allocation.qty;
-          if (!warehouse) warehouse = warehouseStock.warehouse?._id;
-          if (!warehouseName) warehouseName = warehouseStock.warehouse?.name || '';
-          warehouseAllocations.push({
-            warehouse: warehouseStock.warehouse?._id,
-            warehouseName: warehouseStock.warehouse?.name || '',
-            qty: allocation.qty
-          });
+          const duplicateWarehouse = normalizedAllocations.find((allocation, index) =>
+            normalizedAllocations.findIndex(other => String(other.warehouseId) === String(allocation.warehouseId)) !== index
+          );
+          if (duplicateWarehouse) throw new Error(`Select each warehouse only once for ${productLabel(product)}`);
+
+          for (const allocation of normalizedAllocations) {
+            const warehouseStock = warehouseByKey.get(`${product._id}:${allocation.warehouseId}`);
+            if (!warehouseStock || Number(warehouseStock.quantity || 0) < allocation.qty) {
+              throw new Error(`Selected warehouse does not have enough stock for ${productLabel(product)}`);
+            }
+
+            if (!Number.isInteger(allocation.qty)) throw new Error('Warehouse quantity must be a whole number');
+            costAllocations.push(...costs.consume(product, warehouseStock.warehouse?._id || allocation.warehouseId, Number(warehouseStock.quantity), allocation.qty));
+            warehouseStock.quantity -= allocation.qty;
+            warehouseWrites.push({ updateOne: { filter: { _id: warehouseStock._id }, update: { $set: { quantity: warehouseStock.quantity, updatedBy: req.user._id } } } });
+            warehouseQtyUsed += allocation.qty;
+            if (!warehouse) warehouse = warehouseStock.warehouse?._id;
+            if (!warehouseName) warehouseName = warehouseStock.warehouse?.name || '';
+            warehouseAllocations.push({
+              warehouse: warehouseStock.warehouse?._id,
+              warehouseName: warehouseStock.warehouse?.name || '',
+              qty: allocation.qty
+            });
+          }
         }
+
+        const price = Number(item.price ?? productPrice(product));
+        if (!Number.isFinite(price) || price < 0) throw new Error('Selling price must be a valid amount of zero or greater');
+        const gross = price * qty;
+        if (discount > gross) throw new Error('Discount cannot exceed item total');
+        const lineTotal = gross - discount;
+        if (inventoryQtyUsed > 0) costAllocations.push(...costs.consume(product, null, currentStock, inventoryQtyUsed));
+        subtotal += gross;
+        discountTotal += discount;
+        productWrites.push({ updateOne: {
+          filter: { _id: product._id },
+          update: { $inc: { stockRevision: 1 }, ...(inventoryQtyUsed > 0 ? { $set: productStockSet(currentStock - inventoryQtyUsed) } : {}) }
+        } });
+
+        saleItems.push({
+          product: product._id,
+          partName: productData.partName,
+          partCode: productData.partCode,
+          qty,
+          price,
+          discount,
+          costAllocations,
+          costTotal: costAllocations.reduce((sum, allocation) => sum + allocation.qty * allocation.unitCost, 0),
+          costEstimated: costAllocations.some(allocation => allocation.estimated),
+          inventoryQtyUsed,
+          warehouseQtyUsed,
+          warehouse,
+          warehouseName,
+          warehouseAllocations,
+          lineTotal
+        });
       }
 
-      const price = Number(item.price ?? productPrice(product));
-      if (!Number.isFinite(price) || price < 0) throw new Error('Selling price must be a valid amount of zero or greater');
-      const gross = price * qty;
-      if (discount > gross) throw new Error('Discount cannot exceed item total');
-      const lineTotal = gross - discount;
-      if (inventoryQtyUsed > 0) costAllocations.push(...await consumeFifo(product, null, currentStock, inventoryQtyUsed, session));
-      subtotal += gross;
-      discountTotal += discount;
-      if (inventoryQtyUsed > 0) {
-        await Product.collection.updateOne(
-          { _id: product._id },
-          { $set: productStockSet(currentStock - inventoryQtyUsed) },
-          { session }
-        );
+      const grandTotal = subtotal - discountTotal;
+      const requestedPaidAmount = Number(req.body.paidAmount || 0);
+      let paidAmount = paymentStatus === 'paid' ? grandTotal : 0;
+      if (paymentStatus === 'partial') {
+        if (!Number.isFinite(requestedPaidAmount) || requestedPaidAmount <= 0 || requestedPaidAmount >= grandTotal) throw new Error('Partial payment must be greater than zero and less than the total');
+        paidAmount = requestedPaidAmount;
+      }
+      const dueAmount = Math.max(0, grandTotal - paidAmount);
+      if (dueAmount > 0 && !customer) throw new Error('Select an existing customer before adding unpaid balance');
+
+      // Consistent write order reduces lock contention between overlapping bills.
+      productWrites.sort((a, b) => String(a.updateOne.filter._id).localeCompare(String(b.updateOne.filter._id)));
+      warehouseWrites.sort((a, b) => String(a.updateOne.filter._id).localeCompare(String(b.updateOne.filter._id)));
+      await Product.collection.bulkWrite(productWrites, { session, ordered: true });
+      if (warehouseWrites.length) await WarehouseStock.bulkWrite(warehouseWrites, { session, ordered: true });
+      await costs.flush(session);
+      const [sale] = await Sale.create([{
+        _id: saleId,
+        receiptNo,
+        items: saleItems,
+        subtotal,
+        discountTotal,
+        grandTotal,
+        customer: customer?._id,
+        customerName: customer?.name || customerName || 'Walk-in Customer',
+        paymentStatus,
+        paidAmount,
+        dueAmount,
+        soldBy: req.user._id
+      }], { session });
+
+      if (customer) {
+        await addLedgerEntry({
+          customer,
+          type: 'sale',
+          sale: sale._id,
+          description: `Sale bill ${receiptNo}`,
+          debit: grandTotal,
+          credit: paidAmount,
+          userId: req.user._id,
+          session
+        });
       }
 
-      saleItems.push({
-        product: product._id,
-        partName: productData.partName,
-        partCode: productData.partCode,
-        qty,
-        price,
-        discount,
-        costAllocations,
-        costTotal: costAllocations.reduce((sum, allocation) => sum + allocation.qty * allocation.unitCost, 0),
-        costEstimated: costAllocations.some(allocation => allocation.estimated),
-        inventoryQtyUsed,
-        warehouseQtyUsed,
-        warehouse,
-        warehouseName,
-        warehouseAllocations,
-        lineTotal
-      });
-    }
-
-    const grandTotal = subtotal - discountTotal;
-    const requestedPaidAmount = Number(req.body.paidAmount || 0);
-    let paidAmount = paymentStatus === 'paid' ? grandTotal : 0;
-    if (paymentStatus === 'partial') {
-      if (requestedPaidAmount <= 0 || requestedPaidAmount >= grandTotal) throw new Error('Partial payment must be greater than zero and less than the total');
-      paidAmount = requestedPaidAmount;
-    }
-    const dueAmount = Math.max(0, grandTotal - paidAmount);
-    if (dueAmount > 0 && !customer) throw new Error('Select an existing customer before adding unpaid balance');
-
-    const receiptNo = `R-${Date.now()}`;
-    const [sale] = await Sale.create([{
-      receiptNo,
-      items: saleItems,
-      subtotal,
-      discountTotal,
-      grandTotal,
-      customer: customer?._id,
-      customerName: customer?.name || customerName || 'Walk-in Customer',
-      paymentStatus,
-      paidAmount,
-      dueAmount,
-      soldBy: req.user._id
-    }], { session });
-
-    if (customer) {
-      await addLedgerEntry({
-        customer,
-        type: 'sale',
-        sale: sale._id,
-        description: `Sale bill ${receiptNo}`,
-        debit: grandTotal,
-        credit: paidAmount,
-        userId: req.user._id,
-        session
-      });
-    }
-
-    await session.commitTransaction();
-    req.app.get('io').emit('inventory:bulk-update');
+      if (heldId) {
+        const removed = await HeldBill.deleteOne({ _id: heldId, owner: req.user._id }, { session });
+        if (removed.deletedCount !== 1) throw new Error('Held bill changed. Please refresh and retry.');
+      }
+      return sale.toObject();
+    }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, timeoutMS: 45000, maxCommitTimeMS: 10000 });
+    try { req.app.get('io')?.emit('inventory:bulk-update'); }
+    catch (notificationError) { console.error('Inventory notification failed after bill committed:', notificationError); }
     res.status(201).json({
-      ...sale.toObject(),
+      ...result,
       soldBy: {
         _id: req.user._id,
         name: req.user.name,
@@ -384,10 +434,19 @@ router.post('/', requireRole('sales', 'admin'), async (req, res) => {
     });
   } catch (err) {
     console.error('Sale creation failed:', err);
-    await session.abortTransaction();
-    res.status(400).json({ message: err.message });
+    // A commit response may be lost after a successful commit. Recover by ID.
+    if (saleId && (err.hasErrorLabel?.('UnknownTransactionCommitResult') || err.code === 11000 || /Timeout/.test(err.name || ''))) {
+      try {
+        const committed = await Sale.findOne({ _id: saleId, soldBy: req.user._id });
+        if (committed) return res.status(200).json({ ...committed.toObject(), soldBy: { _id: req.user._id, name: req.user.name, username: req.user.username } });
+      } catch (lookupError) { console.error('Bill recovery lookup failed:', lookupError); }
+    }
+    const temporary = err.hasErrorLabel?.('TransientTransactionError') || err.hasErrorLabel?.('UnknownTransactionCommitResult') || /Timeout|Network|ServerSelection/.test(err.name || '');
+    res.status(temporary ? 503 : 400).json({ message: temporary
+      ? 'The database is busy. Your bill items are kept. Check Sales, then retry this same bill; its request ID prevents duplicate billing.'
+      : err.message });
   } finally {
-    session.endSession();
+    await session?.endSession();
   }
 });
 

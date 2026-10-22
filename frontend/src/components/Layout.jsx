@@ -59,6 +59,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
   const salesLinks = [
     { to: '/sales', label: 'Counter', icon: Store },
     { to: '/sales/inventory-list', label: 'Inventory List', icon: Package },
+    { to: '/sales/customers', label: 'Khata', icon: BookOpen },
     { to: '/sales/bills', label: 'Sales', icon: BarChart3 },
     { to: '/sales/purchases', label: 'Purchase Items', icon: PackagePlus },
     { to: '/sales/purchase-orders', label: 'Orders', icon: Package }

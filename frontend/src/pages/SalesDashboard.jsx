@@ -10,9 +10,12 @@ import ShopReceipt from '../components/ShopReceipt.jsx';
 import AppNotice from '../components/AppNotice.jsx';
 import { ButtonSpinner, LoadingState } from '../components/Loader.jsx';
 import { api } from '../api/client.js';
+import { migrateHeldBills } from '../utils/migrateHeldBills.js';
+import { createBillRequestId } from '../utils/billRequestId.js';
+import useCustomerProductPrices from '../hooks/useCustomerProductPrices.js';
+import { applyCustomerPrices } from '../utils/customerPricing.js';
 
 const cartFieldOrder = ['qty', 'price', 'discount'];
-const heldBillsStorageKey = 'salesCounterHeldBills';
 
 function calculateBillTotals(items) {
   const totals = items.reduce((sum, item) => {
@@ -24,8 +27,7 @@ function calculateBillTotals(items) {
 }
 
 function createHeldBillId() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `held-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return createBillRequestId();
 }
 
 export default function SalesDashboard() {
@@ -60,13 +62,14 @@ export default function SalesDashboard() {
   const [showBookingPrice, setShowBookingPrice] = useState(false);
   const [saleModalProduct, setSaleModalProduct] = useState(null);
   const [saleDraft, setSaleDraft] = useState({ qty: '1', price: '', discount: '0' });
-  const [heldBills, setHeldBills] = useState(() => {
-    try {
-      return JSON.parse(window.localStorage.getItem(heldBillsStorageKey) || '[]');
-    } catch (err) {
-      return [];
-    }
-  });
+  const [heldBills, setHeldBills] = useState([]);
+  const [activeHeldBillId, setActiveHeldBillId] = useState(null);
+  const [heldLoading, setHeldLoading] = useState(true);
+  const [heldBusy, setHeldBusy] = useState(false);
+  const heldActionRef = useRef(false);
+  const resumeRequestRef = useRef(false);
+  const heldInitRef = useRef(false);
+  const holdRequestRef = useRef(null);
   const [heldBillsOpen, setHeldBillsOpen] = useState(false);
   const [expandedHeldBillIds, setExpandedHeldBillIds] = useState({});
   const cartFieldRefs = useRef({});
@@ -75,8 +78,24 @@ export default function SalesDashboard() {
   const productSearchNavigatingRef = useRef(false);
   const saleQtyRef = useRef(null);
   const checkoutRequestRef = useRef(false);
+  const billRequestRef = useRef(null);
   const salePriceRef = useRef(null);
   const saleDiscountRef = useRef(null);
+  const modalPriceEditedRef = useRef(false);
+  const pricingCustomerId = customerMode === 'existing' ? selectedCustomer?._id || null : null;
+  const customerRates = useCustomerProductPrices(pricingCustomerId, [...cart.map(item => item.productId), saleModalProduct?._id]);
+
+  useEffect(() => {
+    if (customerRates.loading || customerRates.error) return;
+    setCart(current => applyCustomerPrices(current, pricingCustomerId, customerRates.items));
+  }, [pricingCustomerId, customerRates.items, customerRates.loading, customerRates.error]);
+
+  useEffect(() => {
+    if (!saleModalProduct || customerRates.loading || customerRates.error || modalPriceEditedRef.current) return;
+    const current = cart.find(item => item.productId === saleModalProduct._id && item.priceCustomerId === pricingCustomerId);
+    const price = current?.price ?? customerRates.items[saleModalProduct._id]?.price ?? saleModalProduct.mrp ?? 0;
+    setSaleDraft(draft => String(price) === draft.price ? draft : { ...draft, price: String(price) });
+  }, [saleModalProduct?._id, pricingCustomerId, customerRates.items, customerRates.loading, customerRates.error, cart]);
 
   async function load(pageNum = 1) {
     try {
@@ -125,7 +144,7 @@ export default function SalesDashboard() {
     }
 
     function handleGlobalKeyDown(e) {
-      if (loadingProducts || receipt || returnForm || saleModalProduct || isTypingTarget(e.target)) return;
+      if (loadingProducts || receipt || returnForm || saleModalProduct || heldBillsOpen || heldBusy || checkoutLoading || isTypingTarget(e.target)) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         moveProductSelection(1);
@@ -143,7 +162,7 @@ export default function SalesDashboard() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [loadingProducts, receipt, returnForm, saleModalProduct, products, selectedProductIndex]);
+  }, [loadingProducts, receipt, returnForm, saleModalProduct, heldBillsOpen, heldBusy, checkoutLoading, products, selectedProductIndex]);
   useEffect(() => {
     if (!saleModalProduct) return;
     window.requestAnimationFrame(() => saleQtyRef.current?.select());
@@ -155,9 +174,33 @@ export default function SalesDashboard() {
       return current;
     });
   }, [cart.length]);
+  async function loadHeldBills() {
+    setHeldLoading(true);
+    try {
+      const { data } = await api.get('/held-bills', { timeout: 30000 });
+      setHeldBills(data.items || []);
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Held Bills Failed', message: err.response?.data?.message || 'Could not load held bills. Please try again.' });
+    } finally {
+      setHeldLoading(false);
+    }
+  }
+
   useEffect(() => {
-    window.localStorage.setItem(heldBillsStorageKey, JSON.stringify(heldBills));
-  }, [heldBills]);
+    if (heldInitRef.current) return;
+    heldInitRef.current = true;
+    async function initialize() {
+      try {
+        const result = await migrateHeldBills(window.localStorage, bill => api.post('/held-bills', { ...bill, importLegacy: true }, { timeout: 30000 }));
+        if (result.failed) throw new Error('Some bills could not be copied');
+        if (result.imported) setNotice({ type: 'success', title: 'Held Bills Backed Up', message: `${result.imported} browser-held bill(s) successfully copied to the database.` });
+      } catch {
+        setNotice({ type: 'error', title: 'Held Bill Import Incomplete', message: 'Some browser-held bills could not be copied to the database. They are still saved in this browser. Refresh to retry.' });
+      }
+      await loadHeldBills();
+    }
+    initialize();
+  }, []);
 
   async function loadWarehouseOptions(productId) {
     if (warehouseOptions[productId]) return;
@@ -166,11 +209,14 @@ export default function SalesDashboard() {
   }
 
   function openSaleModal(product) {
+    if (checkoutRequestRef.current || heldActionRef.current || resumeRequestRef.current) return;
     if (!product || Number(product.quantity || 0) + Number(product.warehouseQuantity || 0) <= 0) return;
     setSaleModalProduct(product);
+    modalPriceEditedRef.current = false;
+    const existing = cart.find(item => item.productId === product._id && item.priceCustomerId === pricingCustomerId);
     setSaleDraft({
       qty: '1',
-      price: String(Number(product.mrp ?? 0)),
+      price: String(Number(existing?.price ?? customerRates.items[product._id]?.price ?? product.mrp ?? 0)),
       discount: '0'
     });
   }
@@ -200,6 +246,8 @@ export default function SalesDashboard() {
         ...item,
         qty: nextQty,
         price,
+        priceCustomerId: pricingCustomerId,
+        priceSource: modalPriceEditedRef.current ? 'manual' : 'customer',
         discount: Number(item.discount || 0) + discount,
         warehouseId: nextQty <= Number(item.stock || 0) ? '' : item.warehouseId,
         warehouseAllocations: nextQty <= Number(item.stock || 0) ? [] : item.warehouseAllocations || []
@@ -212,6 +260,9 @@ export default function SalesDashboard() {
         partCode: p.partCode,
         qty,
         price,
+        retailPrice: p.mrp,
+        priceCustomerId: pricingCustomerId,
+        priceSource: modalPriceEditedRef.current ? 'manual' : 'customer',
         discount,
         stock: p.quantity,
         warehouseQuantity: p.warehouseQuantity || 0,
@@ -226,12 +277,16 @@ export default function SalesDashboard() {
   function submitSaleModal(e) {
     e.preventDefault();
     if (!saleModalProduct) return;
+    if (customerRates.loading) return;
+    if (customerRates.error && !modalPriceEditedRef.current) return setNotice({ type: 'error', title: 'Price Lookup Failed', message: 'Retry the price lookup or enter the selling price manually.' });
+    const current = cart.find(item => item.productId === saleModalProduct._id && item.priceCustomerId === pricingCustomerId);
+    const values = { ...saleDraft, price: modalPriceEditedRef.current ? saleDraft.price : current?.price ?? customerRates.items[saleModalProduct._id]?.price ?? saleDraft.price };
     const qty = Number(saleDraft.qty || 0);
     const availableQty = Number(saleModalProduct.quantity || 0) + Number(saleModalProduct.warehouseQuantity || 0);
     if (qty <= 0) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Enter a quantity greater than zero.' });
     if (qty > availableQty) return setNotice({ type: 'error', title: 'Not Enough Stock', message: `Only ${availableQty.toLocaleString()} pieces are available.` });
-    if (saleDraft.price === '' || !Number.isFinite(Number(saleDraft.price)) || Number(saleDraft.price) < 0) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Enter a valid selling price of zero or greater.' });
-    addSale(saleModalProduct, saleDraft);
+    if (values.price === '' || !Number.isFinite(Number(values.price)) || Number(values.price) < 0) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Enter a valid selling price of zero or greater.' });
+    addSale(saleModalProduct, values);
     setQ('');
     closeSaleModal();
     scrollToProductSearch();
@@ -258,7 +313,7 @@ export default function SalesDashboard() {
     }
   }
 
-  function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0 } : x)); }
+  function update(i, key, val) { setCart(c => c.map((x, idx) => idx === i ? { ...x, [key]: Number(val) || 0, ...(key === 'price' ? { priceSource: 'manual', priceCustomerId: pricingCustomerId } : {}) } : x)); }
   function updateCartQty(index, value, item) {
     const qty = Number(value) || 0;
     setCart(c => c.map((x, idx) => idx === index ? {
@@ -310,6 +365,9 @@ export default function SalesDashboard() {
   const totals = useMemo(() => calculateBillTotals(cart), [cart]);
 
   function resetCurrentBill() {
+    holdRequestRef.current = null;
+    setActiveHeldBillId(null);
+    billRequestRef.current = null;
     setCart([]);
     setSelectedCart({ row: -1, field: 'qty' });
     setCustomerMode('walk-in');
@@ -325,16 +383,18 @@ export default function SalesDashboard() {
 
   function createHeldBillSnapshot() {
     if (!cart.length) return null;
-    const billTotals = calculateBillTotals(cart);
+    const snapshotCart = applyCustomerPrices(cart, pricingCustomerId, customerRates.items);
+    const billTotals = calculateBillTotals(snapshotCart);
     return {
-      id: createHeldBillId(),
+      id: holdRequestRef.current || (holdRequestRef.current = createHeldBillId()),
       createdAt: new Date().toISOString(),
-      cart,
+      cart: snapshotCart,
       customerMode,
       selectedCustomer,
       customerSearch,
       paymentStatus,
       paidAmount,
+      requestIdentity: billRequestRef.current,
       totals: billTotals
     };
   }
@@ -343,47 +403,92 @@ export default function SalesDashboard() {
     return bill.selectedCustomer?.name || (bill.customerMode === 'walk-in' ? 'Walk-in Customer' : 'Existing Customer');
   }
 
-  function holdCurrentBill({ silent = false } = {}) {
+  async function holdCurrentBill({ silent = false } = {}) {
+    if (checkoutRequestRef.current || heldActionRef.current || heldLoading) return null;
+    if (customerRates.loading || (customerRates.error && cart.some(item => item.priceCustomerId !== pricingCustomerId))) {
+      setNotice({ type: 'error', title: 'Customer Prices Required', message: 'Wait for customer prices to load, retry the lookup, or enter prices manually before holding this bill.' });
+      return null;
+    }
     const snapshot = createHeldBillSnapshot();
     if (!snapshot) {
       if (!silent) setNotice({ type: 'error', title: 'No Bill To Hold', message: 'Add at least one item before holding a bill.' });
       return null;
     }
-    setHeldBills(current => [snapshot, ...current]);
-    resetCurrentBill();
-    if (!silent) {
-      setHeldBillsOpen(true);
-      setNotice({ type: 'success', title: 'Bill Held', message: `${customerLabelForBill(snapshot)} bill is saved for later.` });
+    heldActionRef.current = true;
+    setHeldBusy(true);
+    try {
+      const response = activeHeldBillId
+        ? await api.put(`/held-bills/${activeHeldBillId}`, snapshot, { timeout: 30000 })
+        : await api.post('/held-bills', snapshot, { timeout: 30000 });
+      if (response.data.completed) {
+        setNotice({ type: 'error', title: 'Bill Already Completed', message: 'This held bill already has a receipt. Check Sales before creating another bill.' });
+        return null;
+      }
+      const saved = response.data.bill;
+      setHeldBills(current => [saved, ...current.filter(bill => bill.id !== saved.id)]);
+      resetCurrentBill();
+      if (!silent) {
+        setHeldBillsOpen(true);
+        setNotice({ type: 'success', title: 'Bill Held', message: `${customerLabelForBill(saved)} bill is saved in the database.` });
+      }
+      return saved;
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Could Not Hold Bill', message: err.response?.data?.message || 'The bill could not be saved. Your current bill is kept; please try again.' });
+      return null;
+    } finally {
+      heldActionRef.current = false;
+      setHeldBusy(false);
     }
-    return snapshot;
   }
 
-  function resumeHeldBill(bill) {
-    if (!bill) return;
-    const resumedCart = bill.cart || [];
-    if (cart.length) holdCurrentBill({ silent: true });
-    setCart(resumedCart);
-    setSelectedCart(resumedCart.length ? { row: 0, field: 'qty' } : { row: -1, field: 'qty' });
-    setCustomerMode(bill.customerMode || 'walk-in');
-    setSelectedCustomer(bill.selectedCustomer || null);
-    setCustomerSearch(bill.customerSearch || '');
-    setPaymentStatus(bill.paymentStatus || 'paid');
-    setPaidAmount(bill.paidAmount || '');
-    resumedCart.forEach(item => {
-      if (Number(item.qty || 0) > Number(item.stock || 0)) loadWarehouseOptions(item.productId);
-    });
-    setHeldBills(current => current.filter(item => item.id !== bill.id));
-    setHeldBillsOpen(false);
-    setNotice({ type: 'success', title: 'Bill Resumed', message: `${customerLabelForBill(bill)} bill is back on the counter.` });
+  async function resumeHeldBill(bill) {
+    if (!bill || resumeRequestRef.current || heldActionRef.current || checkoutRequestRef.current) return;
+    if (activeHeldBillId === bill.id) { setHeldBillsOpen(false); return; }
+    resumeRequestRef.current = true;
+    try {
+      if (cart.length && !await holdCurrentBill({ silent: true })) return;
+      setHeldBusy(true);
+      const { data: saved } = await api.get(`/held-bills/${bill.id}`, { timeout: 30000 });
+      const resumedCustomerId = saved.customerMode === 'existing' ? saved.selectedCustomer?._id || null : null;
+      const resumedCart = (saved.cart || []).map(item => ({ ...item, priceCustomerId: resumedCustomerId, priceSource: 'held' }));
+      billRequestRef.current = saved.requestIdentity || null;
+      holdRequestRef.current = null;
+      setActiveHeldBillId(saved.id);
+      setCart(resumedCart);
+      setSelectedCart(resumedCart.length ? { row: 0, field: 'qty' } : { row: -1, field: 'qty' });
+      setCustomerMode(saved.customerMode || 'walk-in');
+      setSelectedCustomer(saved.selectedCustomer || null);
+      setCustomerSearch(saved.customerSearch || '');
+      setPaymentStatus(saved.paymentStatus || 'paid');
+      setPaidAmount(saved.paidAmount || '');
+      resumedCart.forEach(item => {
+        if (Number(item.qty || 0) > Number(item.stock || 0)) loadWarehouseOptions(item.productId);
+      });
+      setHeldBillsOpen(false);
+      setNotice({ type: 'success', title: 'Bill Resumed', message: `${customerLabelForBill(saved)} bill is on the counter. Its database copy stays saved until the receipt is created.` });
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Could Not Resume Bill', message: err.response?.data?.message || 'Please try again. The held bill is still saved.' });
+    } finally {
+      resumeRequestRef.current = false;
+      setHeldBusy(false);
+    }
   }
 
-  function removeHeldBill(billId) {
-    setHeldBills(current => current.filter(item => item.id !== billId));
-    setExpandedHeldBillIds(current => {
-      const next = { ...current };
-      delete next[billId];
-      return next;
-    });
+  async function removeHeldBill(billId) {
+    if (heldActionRef.current || checkoutRequestRef.current || resumeRequestRef.current) return;
+    heldActionRef.current = true;
+    setHeldBusy(true);
+    try {
+      await api.delete(`/held-bills/${billId}`, { timeout: 30000 });
+      setHeldBills(current => current.filter(item => item.id !== billId));
+      if (activeHeldBillId === billId) { setActiveHeldBillId(null); billRequestRef.current = null; }
+      setExpandedHeldBillIds(current => { const next = { ...current }; delete next[billId]; return next; });
+    } catch (err) {
+      setNotice({ type: 'error', title: 'Could Not Remove Held Bill', message: err.response?.data?.message || 'Please try again.' });
+    } finally {
+      heldActionRef.current = false;
+      setHeldBusy(false);
+    }
   }
 
   function toggleHeldBillDetails(billId) {
@@ -470,9 +575,14 @@ export default function SalesDashboard() {
   }
 
   async function checkout() {
-    if (checkoutRequestRef.current) return;
+    if (checkoutRequestRef.current || heldActionRef.current || resumeRequestRef.current || heldLoading) return;
+    let stage = 'prepare';
     try {
       if (!cart.length) return;
+      if (customerRates.loading) return setNotice({ type: 'error', title: 'Loading Prices', message: 'Please wait for customer prices to load.' });
+      if (customerRates.error && cart.some(item => item.priceCustomerId !== pricingCustomerId)) return setNotice({ type: 'error', title: 'Price Lookup Failed', message: 'Retry the lookup or enter each selling price manually for this customer.' });
+      const checkoutCart = applyCustomerPrices(cart, pricingCustomerId, customerRates.items);
+      const checkoutBillTotal = calculateBillTotals(checkoutCart).total;
       if (customerMode === 'existing' && !selectedCustomer) return setNotice({ type: 'error', title: 'Customer Required', message: 'Select a customer for this bill.' });
       if (customerMode === 'walk-in' && paymentStatus !== 'paid') return setNotice({ type: 'error', title: 'Customer Required', message: 'Unpaid or partial bills must be linked to an existing customer.' });
       const itemMissingWarehouse = cart.find(item => {
@@ -483,21 +593,35 @@ export default function SalesDashboard() {
         const shortageQty = Math.max(0, Number(itemMissingWarehouse.qty || 0) - Number(itemMissingWarehouse.stock || 0));
         return setNotice({ type: 'error', title: 'Warehouse Required', message: `Allocate exactly ${shortageQty} warehouse item(s) for ${itemMissingWarehouse.partCode}.` });
       }
-      if (cart.some(item => !Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Selling prices must be valid amounts of zero or greater.' });
-      if (cart.some(item => !Number.isInteger(Number(item.qty)) || Number(item.qty) <= 0)) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Each item quantity must be a whole number greater than zero.' });
-      if (cart.some(item => !Number.isFinite(Number(item.discount || 0)) || Number(item.discount || 0) < 0 || Number(item.discount || 0) > Number(item.price) * Number(item.qty))) return setNotice({ type: 'error', title: 'Invalid Discount', message: 'Each discount must be zero or greater and cannot exceed the item total.' });
-      if (paymentStatus === 'partial' && (!Number.isFinite(Number(paidAmount)) || Number(paidAmount) <= 0 || Number(paidAmount) >= billTotal)) return setNotice({ type: 'error', title: 'Invalid Partial Payment', message: 'The paid amount must be greater than zero and less than the bill total.' });
+      if (checkoutCart.some(item => !Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return setNotice({ type: 'error', title: 'Invalid Price', message: 'Selling prices must be valid amounts of zero or greater.' });
+      if (checkoutCart.some(item => !Number.isInteger(Number(item.qty)) || Number(item.qty) <= 0)) return setNotice({ type: 'error', title: 'Invalid Quantity', message: 'Each item quantity must be a whole number greater than zero.' });
+      if (checkoutCart.some(item => !Number.isFinite(Number(item.discount || 0)) || Number(item.discount || 0) < 0 || Number(item.discount || 0) > Number(item.price) * Number(item.qty))) return setNotice({ type: 'error', title: 'Invalid Discount', message: 'Each discount must be zero or greater and cannot exceed the item total.' });
+      if (paymentStatus === 'partial' && (!Number.isFinite(Number(paidAmount)) || Number(paidAmount) <= 0 || Number(paidAmount) >= checkoutBillTotal)) return setNotice({ type: 'error', title: 'Invalid Partial Payment', message: 'The paid amount must be greater than zero and less than the bill total.' });
       checkoutRequestRef.current = true;
       setNotice(null);
       setCheckoutLoading(true);
-      const r = await api.post('/sales', {
+      const body = {
+        heldBillId: activeHeldBillId || undefined,
         customerName: selectedCustomer?.name || 'Walk-in Customer',
         customerId: customerMode === 'existing' ? selectedCustomer?._id : undefined,
         paymentStatus,
         paidAmount: paymentStatus === 'partial' ? Number(paidAmount || 0) : undefined,
-        items: cart.map(item => ({ ...item, warehouseId: item.warehouseId || undefined }))
-      });
+        items: checkoutCart.map(item => ({ ...item, warehouseId: item.warehouseId || undefined }))
+      };
+      const signature = JSON.stringify(body);
+      if (billRequestRef.current?.signature !== signature) {
+        billRequestRef.current = { signature, id: createBillRequestId() };
+      }
+      stage = 'save-held-bill';
+      if (activeHeldBillId) await api.put(`/held-bills/${activeHeldBillId}`, createHeldBillSnapshot(), { timeout: 30000 });
+      stage = 'create-receipt';
+      const r = await api.post('/sales', { ...body, requestId: billRequestRef.current.id });
+      stage = 'display-receipt';
+      if (activeHeldBillId) setHeldBills(current => current.filter(bill => bill.id !== activeHeldBillId));
+      setActiveHeldBillId(null);
       setReceipt(r.data);
+      holdRequestRef.current = null;
+      billRequestRef.current = null;
       setCart([]);
       setCustomerMode('walk-in');
       setSelectedCustomer(null);
@@ -506,12 +630,18 @@ export default function SalesDashboard() {
       setPaidAmount('');
       await load(page);
     } catch (err) {
+      const networkFailure = err.isAxiosError === true && !err.response;
+      console.error('Checkout failed:', { stage, name: err.name, code: err.code, message: err.message });
+      // Technical metadata only: no customer details or bill contents.
+      api.post('/sales/checkout-error', { stage, name: err.name, code: err.code, message: String(err.message || '').slice(0, 500), heldBillId: activeHeldBillId || undefined }, { timeout: 5000 }).catch(() => {});
       setNotice({
         type: 'error',
         title: 'Bill Could Not Be Created',
         message: err.response?.data?.message || (err.response
           ? `The server could not complete the bill (HTTP ${err.response.status}). Your bill items have been kept.`
-          : 'The server response was interrupted. Check Sales for this bill before trying again to avoid a duplicate. Your bill items have been kept.')
+          : networkFailure
+            ? `${stage === 'save-held-bill' ? 'Saving the held bill' : 'Contacting the sales server'} failed (${err.code || 'network error'}). Your bill is kept. Check Sales before retrying.`
+            : `Checkout could not continue: ${err.message || 'Unexpected browser error'}. Your bill items have been kept.`)
       });
     } finally {
       checkoutRequestRef.current = false;
@@ -628,7 +758,7 @@ export default function SalesDashboard() {
     headerAction={
       <button
         type="button"
-        onClick={() => setHeldBillsOpen(true)}
+        onClick={() => { setHeldBillsOpen(true); loadHeldBills(); }}
         className="relative inline-flex items-center justify-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-soft hover:bg-slate-50"
         title="Held bills"
       >
@@ -639,10 +769,17 @@ export default function SalesDashboard() {
     }
   >
     <AppNotice notice={notice} onClose={() => setNotice(null)} />
-    <Link to="/sales/inventory-list" className="mb-5 block rounded-2xl border bg-white p-5 shadow-sm hover:border-brand-red">
+    <div className="mb-5 grid gap-3 sm:grid-cols-2">
+    <Link to="/sales/inventory-list" className="block rounded-2xl border bg-white p-5 shadow-sm hover:border-brand-red">
       <p className="font-bold text-brand-red">Inventory List</p>
       <p className="mt-1 text-sm text-slate-500">View and edit the full inventory, prices and stock without pagination.</p>
     </Link>
+    <Link to="/sales/customers" className="block rounded-2xl border bg-white p-5 shadow-sm hover:border-brand-red">
+      <p className="font-bold text-brand-red">Khata</p>
+      <p className="mt-1 text-sm text-slate-500">View customer balances and search products to see previous sale dates and rates.</p>
+    </Link>
+    </div>
+    <fieldset disabled={heldBusy || checkoutLoading} className="contents" aria-label="Sales counter">
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0">
         <div ref={productSearchRef} className="mb-5 flex min-w-0 scroll-mt-5 flex-col gap-3 sm:flex-row xl:flex-nowrap">
@@ -690,8 +827,8 @@ export default function SalesDashboard() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-xl font-bold">Current Bill</h3>
           {cart.length > 0 && <div className="flex items-center gap-2">
-            <button type="button" onClick={() => holdCurrentBill()} className="rounded-xl border px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" title="Hold current bill">Hold</button>
-            <button type="button" onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>
+            <button type="button" disabled={heldBusy || heldLoading || checkoutLoading} onClick={() => holdCurrentBill()} className="rounded-xl border px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" title="Hold current bill">Hold</button>
+            <button type="button" disabled={heldBusy || checkoutLoading} onClick={clearCurrentBill} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50 hover:text-brand-red" title="Clear current bill" aria-label="Clear current bill"><X size={18}/></button>
           </div>}
         </div>
         <div className="mb-4 border-b pb-4">
@@ -699,6 +836,8 @@ export default function SalesDashboard() {
               setCustomerMode(mode); setCustomerSearch('');
               if (mode === 'walk-in') { setSelectedCustomer(null); setPaymentStatus('paid'); }
             }} search={customerSearch} onSearchChange={setCustomerSearch} selected={selectedCustomer} onSelect={setSelectedCustomer} />
+          {customerRates.loading && cart.length > 0 && <p role="status" className="mt-2 text-xs text-slate-500">Loading customer prices...</p>}
+          {customerRates.error && <p role="alert" className="mt-2 text-xs text-red-700">{customerRates.error} <button type="button" onClick={customerRates.retry} className="font-semibold underline">Retry</button></p>}
         </div>
         {cart.length===0 ? <p className="text-slate-500">No items added.</p> : <div className="space-y-3">
           {cart.map((i,idx)=>{
@@ -800,13 +939,15 @@ export default function SalesDashboard() {
               Due added to khata: <b>Rs {duePreview.toLocaleString()}</b>
             </div>}
           </div>
-          <button onClick={checkout} disabled={checkoutLoading} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
+          <button onClick={checkout} disabled={checkoutLoading || heldBusy || heldLoading} className="w-full rounded-xl bg-brand-red text-white py-3 font-bold disabled:cursor-not-allowed disabled:opacity-70 flex items-center justify-center gap-2">
             {checkoutLoading && <ButtonSpinner />}
             {checkoutLoading ? 'Creating receipt...' : 'Create Receipt'}
           </button>
         </div>}
       </aside>
     </div>
+
+    </fieldset>
 
     {heldBillsOpen && <div className="no-print fixed inset-0 z-[80]">
       <button type="button" className="absolute inset-0 bg-slate-950/40" onClick={() => setHeldBillsOpen(false)} aria-label="Close held bills" />
@@ -822,7 +963,8 @@ export default function SalesDashboard() {
           <button type="button" onClick={() => setHeldBillsOpen(false)} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50" title="Close held bills"><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          {heldBills.length === 0 && <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed p-8 text-center">
+          {heldLoading && <LoadingState label="Loading held bills..." />}
+          {!heldLoading && heldBills.length === 0 && <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed p-8 text-center">
             <div>
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-xl bg-slate-50 text-slate-500"><ReceiptText size={22} /></div>
               <p className="font-semibold text-slate-900">No held bills</p>
@@ -871,11 +1013,11 @@ export default function SalesDashboard() {
                   </div>
                 </div>}
                 <div className="mt-4 flex gap-2">
-                  <button type="button" onClick={() => resumeHeldBill(bill)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-red px-4 py-3 text-sm font-bold text-white">
+                  <button type="button" disabled={heldBusy || checkoutLoading} onClick={() => resumeHeldBill(bill)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-red px-4 py-3 text-sm font-bold text-white">
                     <RotateCcw size={16} />
-                    Resume
+                    {activeHeldBillId === bill.id ? 'Open on Counter' : 'Resume'}
                   </button>
-                  <button type="button" onClick={() => removeHeldBill(bill.id)} className="rounded-xl border px-3 py-3 text-slate-500 hover:bg-red-50 hover:text-brand-red" title="Remove held bill">
+                  <button type="button" disabled={heldBusy || checkoutLoading} onClick={() => removeHeldBill(bill.id)} className="rounded-xl border px-3 py-3 text-slate-500 hover:bg-red-50 hover:text-brand-red" title="Remove held bill">
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -932,9 +1074,15 @@ export default function SalesDashboard() {
               min="0"
               value={saleDraft.price}
               onKeyDown={e => handleSaleDraftKeyDown(e, 'price')}
-              onChange={e => setSaleDraft(current => ({ ...current, price: e.target.value }))}
+              onChange={e => { modalPriceEditedRef.current = true; setSaleDraft(current => ({ ...current, price: e.target.value })); }}
               className="mt-1 w-full rounded-xl border p-3 text-lg font-semibold focus:border-brand-red focus:outline-none focus:ring-2 focus:ring-brand-red/20"
             />
+            {customerRates.loading ? <p role="status" className="mt-2 text-xs text-slate-500">Loading previous selling price...</p> : customerRates.error ?
+              <p role="alert" className="mt-2 text-xs text-red-700">{customerRates.error} <button type="button" onClick={customerRates.retry} className="font-semibold underline">Retry</button></p> :
+              pricingCustomerId && <p className="mt-2 text-xs text-slate-500">{modalPriceEditedRef.current ? 'Your entered price will be used for this bill.' : customerRates.items[saleModalProduct._id]?.hasHistory
+                ? `Last price for ${selectedCustomer.name}: Rs ${Number(customerRates.items[saleModalProduct._id].price).toLocaleString()} (${new Date(customerRates.items[saleModalProduct._id].soldAt).toLocaleDateString()}).`
+                : 'No previous sale for this customer and product. Using retail price.'}</p>}
+
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-700">Discount</label>
@@ -964,7 +1112,7 @@ export default function SalesDashboard() {
         )}
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button type="submit" className="flex-1 rounded-xl bg-brand-red py-3 font-bold text-white">
+          <button type="submit" disabled={customerRates.loading || Boolean(customerRates.error && !modalPriceEditedRef.current)} className="flex-1 rounded-xl bg-brand-red py-3 font-bold text-white disabled:opacity-50">
             Add to Bill
           </button>
           <button type="button" onClick={closeSaleModal} className="rounded-xl border px-5 py-3 font-bold">

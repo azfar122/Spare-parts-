@@ -43,6 +43,7 @@ function App() {
     <Route path="/admin/purchase-orders" element={<Protected role="admin"><PurchaseOrders /></Protected>} />
     <Route path="/sales" element={<Protected role="sales"><SalesDashboard /></Protected>} />
     <Route path="/sales/inventory-list" element={<Protected role="sales"><InventoryList /></Protected>} />
+    <Route path="/sales/customers" element={<Protected role="sales"><CustomerLedger /></Protected>} />
     <Route path="/sales/bills" element={<Protected role="sales"><SalesBills /></Protected>} />
     <Route path="/sales/purchase-orders" element={<Protected role="sales"><PurchaseOrders canReceive={false} title="Orders" subtitle="Create manufacturer purchase orders and track their status." /></Protected>} />
     <Route path="*" element={<Navigate to="/login" replace />} />
