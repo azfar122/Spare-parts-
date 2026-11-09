@@ -1,10 +1,14 @@
 const number = value => Number(value ?? 0).toLocaleString('en-PK', { maximumFractionDigits: 2 });
 const money = value => `Rs ${number(value)}`;
 
-export const inventoryHeaders = ['Part No', 'Product Name', 'Brand', 'Retail Price', 'Wholesale Price', 'Booking Price', 'Shop Qty', 'Warehouse Qty', 'Total Qty'];
+export const inventoryHeaders = ['Sr No', 'Part No', 'Product Name', 'Brand', 'Retail Price', 'Wholesale Price', 'Booking Price', 'Shop Qty', 'Warehouse Qty', 'Total Qty'];
 
 export function inventoryRows(products) {
-  return products.map(product => [product.partCode || '-', product.partName || '-', product.brand || '-',
+  const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+  const sorted = [...products].sort((a, b) =>
+    collator.compare((a.partName || '').trim(), (b.partName || '').trim()) ||
+    collator.compare(a.partCode || '', b.partCode || ''));
+  return sorted.map((product, index) => [index + 1, product.partCode || '-', product.partName || '-', product.brand || '-',
     money(product.mrp), money(product.wholesalePrice), money(product.bookingPrice), number(product.quantity),
     number(product.warehouseQuantity), number(Number(product.quantity || 0) + Number(product.warehouseQuantity || 0))]);
 }
@@ -25,7 +29,7 @@ export async function downloadInventoryReport(products, generatedAt) {
     margin: { top: 15, bottom: 15, left: 12, right: 12 },
     styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
     headStyles: { fillColor: [30, 41, 59] }, rowPageBreak: 'avoid',
-    columnStyles: { 1: { cellWidth: 48 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } }
+    columnStyles: { 0: { cellWidth: 12 }, 2: { cellWidth: 48 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
   });
   const pages = pdf.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {

@@ -54,7 +54,7 @@ export default function InventoryReport() {
       <div className="overflow-x-auto rounded-xl border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-100"><tr>{inventoryHeaders.map(label => <th key={label} scope="col" className="p-3 text-left">{label}</th>)}</tr></thead>
-          <tbody>{inventoryRows(report.products).map((row, index) => <tr key={report.products[index]._id} className="border-t">{row.map((value, column) => <td key={column} className="p-3">{value}</td>)}</tr>)}</tbody>
+          <tbody>{inventoryRows(report.products).map(row => <tr key={row[0]} className="border-t">{row.map((value, column) => <td key={column} className="p-3">{value}</td>)}</tr>)}</tbody>
         </table>
         {!report.products.length && <p className="p-6 text-center text-slate-500">No products in inventory.</p>}
       </div>
