@@ -49,6 +49,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
   const adminLinks = [
     { to: '/admin', label: 'Inventory', icon: Store },
     { to: '/admin/inventory-list', label: 'Inventory List', icon: Package },
+    { to: '/admin/inventory-report', label: 'Fetch Inventory List', icon: FileText },
     { to: '/admin/settings', label: 'Settings', icon: ShieldCheck },
     { to: '/admin/sales', label: 'Sales', icon: BarChart3 },
     { to: '/admin/customers', label: 'Khata', icon: BookOpen },
@@ -59,6 +60,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
   const salesLinks = [
     { to: '/sales', label: 'Counter', icon: Store },
     { to: '/sales/inventory-list', label: 'Inventory List', icon: Package },
+    { to: '/sales/inventory-report', label: 'Fetch Inventory List', icon: FileText },
     { to: '/sales/customers', label: 'Khata', icon: BookOpen },
     { to: '/sales/bills', label: 'Sales', icon: BarChart3 },
     { to: '/sales/purchases', label: 'Purchase Items', icon: PackagePlus },
@@ -118,7 +120,7 @@ export default function Layout({ title, subtitle, children, wide = false, header
           </div>
           <button type="button" onClick={() => setMobileMenuOpen(false)} className="rounded-xl bg-white/10 p-2" aria-label="Close menu"><X size={18}/></button>
         </div>
-        <nav className="grid gap-2">
+        <nav className="grid gap-2 overflow-y-auto">
           <NavItems mobile />
         </nav>
         <button onClick={logout} className="mt-auto flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/20"><LogOut size={16}/>Logout</button>

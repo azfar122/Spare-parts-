@@ -1,3 +1,4 @@
+import InventoryReport from './pages/InventoryReport.jsx';
 import DailyReport from './pages/DailyReport.jsx';
 import useKeyboardNavigation from './hooks/useKeyboardNavigation.js';
 import React from 'react';
@@ -31,6 +32,8 @@ function App() {
   return <BrowserRouter><AuthProvider><Routes>
     <Route path="/admin/daily-report" element={<Protected role="admin"><DailyReport /></Protected>} />
     <Route path="/sales/daily-report" element={<Protected role="sales"><DailyReport /></Protected>} />
+    <Route path="/admin/inventory-report" element={<Protected role="admin"><InventoryReport /></Protected>} />
+    <Route path="/sales/inventory-report" element={<Protected role="sales"><InventoryReport /></Protected>} />
     <Route path="/login" element={<Login />} />
     <Route path="/admin/settings" element={<Protected role="admin"><AdminSettings /></Protected>} />
     <Route path="/admin/purchases" element={<Protected role="admin"><PurchaseItems /></Protected>} />

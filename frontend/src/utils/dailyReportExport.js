@@ -46,11 +46,11 @@ export async function downloadDailyReport(report) {
   pdf.save(`daily-report-${report.date}-${report.scope === 'Your sales' ? 'my-sales' : 'shop'}.pdf`);
 }
 
-export function printDailyReport(element) {
+export function printDailyReport(element, title = 'Asif Auto Traders - Daily Report') {
   const preview = window.open('', '_blank', 'width=1200,height=850');
   if (!preview) throw new Error('Allow popups to open the print preview.');
   preview.document.open();
-  preview.document.write(`<!doctype html><html><head><title>Asif Auto Traders - Daily Report</title><style>
+  preview.document.write(`<!doctype html><html><head><title>${title}</title><style>
     @page { size: A4 landscape; margin: 12mm; }
     body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 10pt; }
     h1 { font-size: 18pt; } h3 { font-size: 12pt; margin: 18px 0 8px; break-after: avoid; }
@@ -61,7 +61,7 @@ export function printDailyReport(element) {
     .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
     .grid > div { border: 1px solid #cbd5e1; padding: 8px; }
     p { margin: 5px 0; } .block { display: block; } .text-xs { font-size: 7pt; } .no-print { display: none; }
-  </style></head><body><h1>Asif Auto Traders - Daily Report</h1></body></html>`);
+  </style></head><body><h1>${title}</h1></body></html>`);
   preview.document.body.appendChild(preview.document.importNode(element, true));
   preview.document.close();
   preview.onafterprint = () => preview.close();
